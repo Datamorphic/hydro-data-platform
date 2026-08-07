@@ -3,6 +3,7 @@ name: Deploy documentation
 on:
   push:
     branches:
+      - main
       - 3-setup-github-pages
 
 permissions:
