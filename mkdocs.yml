@@ -1,0 +1,13 @@
+site_name: "Hydro Data Platform"
+site_description: "Business and design documentation for the Hydro Data Platform project."
+site_author: "Jonathan Gendron"
+
+theme:
+  name: material
+
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
