@@ -11,7 +11,7 @@ The data platform will feature a lakehouse architecture built atop local object 
 ### Storage Zone Breakdown
 **Landing:** _Raw data preserved from upstream source._<br>
 **Bronze:** _Validated data that is safe for downstream processing._<br>
-**Silver:** _Cleansed, standardized, and integrated enterprise data._<br>
+**Silver:** _Cleansed, standardized, curated and integrated enterprise data._<br>
 **Gold:** _Business-ready data that has been modeled and optimized for analyics and hydrologic modeling._<br>
 
 ```mermaid
