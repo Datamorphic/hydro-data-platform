@@ -114,7 +114,8 @@ flowchart TB
 | Overall workflow coordination    | Coordinate the entire ingestion lifecycle                | **Ingestion Orchestrator**                   | Configuration, component results       | Ingestion completion/status |
 
 # Component Diagram
-Shows interactions between key system components
+Shows interactions between key system components as well as the dependency of that interaction.
+> e.g. ***Ingestion Orchestrator*** relies on *planning logic* in the ***Retrieval Planner***, denoted by `plan()`.
 
 ```mermaid
 ---
@@ -122,61 +123,131 @@ config:
   theme: redux
 ---
 graph TD
-    %% Containers
+
+    %% =========================
+    %% External NASA Services
+    %% =========================
+
     subgraph external["External Services (NASA)"]
-        e1["Authentication"]
+
+        e1["NASA Earthdata<br>(Authentication)"]
         e2["NASA CMR<br>(Catalog Search)"]
         e3["NASA Earthdata<br>(Full Granules)"]
         e4["GES DISC<br>(Subset Granules)"]
+
     end
 
+
+    %% =========================
+    %% Internal Components
+    %% =========================
+
     subgraph internal["Internal"]
-        subgraph Orchestration["Orchestration"]
+
+        subgraph orchestration["Orchestration"]
+
             i1["Ingestion Orchestrator"]
-            i2["Job Planner"]
-            i3["Job Executor"]
+            i2["Retrieval Planner"]
+            i3["Retrieval Executor"]
             i4["Ingestion Evaluator"]
+
         end
 
-        subgraph client["NASA Client"]
+
+        subgraph client["NASA Clients"]
+
             c1["Authentication Client"]
             c2["Catalog Client"]
             c3["Data Client"]
+
         end
+
 
         subgraph processing["Data Processing"]
+
             p1["Granule Processor"]
             p2["NetCDF Validator"]
+
         end
 
-        subgraph metadata["Metadata/Persistance"]
+
+        subgraph metadata["Metadata / Persistence"]
+
             m1["Ingestion Recorder"]
+
         end
+
     end
+
+
+    %% =========================
+    %% Internal Storage
+    %% =========================
 
     subgraph storage["Internal Storage"]
-        subgraph object["Raw Landing"]
-            so1["NetCDF File"]
-            so2["NetCDF File"]
-            so3["NetCDF File"]
-        end
-        s1["Job Log"]
+
+        s1["Raw Landing<br>NetCDF Files"]
+        s2["Ingestion Metadata"]
+
     end
 
-    %% Relationships
-    i1 --> c1 & c2 & m1
-    c1 & c2 --> i2
-    i2 --> i3
-    i3 --> p1
-    p1 --> c3 & p2 & m1 & storage
-    c3 <--> e3 & e4
-    c1 --> e1
-    c2 --> e2
-    m1 --> s1
 
-    %% Styles
-    so1@{ shape: lin-cyl}
-    so2@{ shape: lin-cyl}
-    so3@{ shape: lin-cyl}
+    %% =========================
+    %% Orchestration Interactions
+    %% =========================
+
+    i1 -->|"authenticate()"| c1
+    i1 -->|"search()"| c2
+    i1 -->|"plan()"| i2
+    i1 -->|"execute()"| i3
+    i1 -->|"evaluate()"| i4
+    i1 -->|"record ingestion"| m1
+
+
+    %% =========================
+    %% Retrieval Execution
+    %% =========================
+
+    i3 -->|"process jobs concurrently"| p1
+
+
+    %% =========================
+    %% Granule Processing
+    %% =========================
+
+    p1 -->|"retrieve()"| c3
+    p1 -->|"validate()"| p2
+    p1 -->|"record granule result"| m1
+
+
+    %% =========================
+    %% NASA Client Interactions
+    %% =========================
+
+    c1 -->|"authenticate()"| e1
+    c2 -->|"search catalog"| e2
+    c3 -->|"retrieve full granule"| e3
+    c3 -->|"retrieve subset granule"| e4
+
+
+    %% =========================
+    %% Data Landing
+    %% =========================
+
+    c3 -->|"write retrieved data"| s1
+
+
+    %% =========================
+    %% Metadata Persistence
+    %% =========================
+
+    m1 -->|"write ingestion records"| s2
+
+
+    %% =========================
+    %% Storage Shapes
+    %% =========================
+
     s1@{ shape: lin-cyl}
+    s2@{ shape: lin-cyl}
 ```
