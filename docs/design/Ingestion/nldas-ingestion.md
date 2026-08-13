@@ -251,3 +251,273 @@ graph TD
     s1@{ shape: lin-cyl}
     s2@{ shape: lin-cyl}
 ```
+
+## Sequence Diagram
+Shows the flow of a program between components over time. The order of event happen from top to bottom.
+
+```mermaid
+
+---
+config:
+  theme: redux
+---
+sequenceDiagram
+
+    actor User
+
+    participant O as Ingestion Orchestrator
+    participant A as Authentication Client
+    participant C as Catalog Client
+    participant P as Retrieval Planner
+    participant E as Retrieval Executor
+    participant G as Granule Processor
+    participant D as NASA Data Client
+    participant V as NetCDF Validator
+    participant R as Ingestion Recorder
+    participant I as Ingestion Evaluator
+
+    participant Auth as NASA Earthdata<br/>Authentication
+    participant CMR as NASA CMR<br/>Catalog
+    participant Full as NASA Earthdata<br/>Full Granules
+    participant Subset as GES DISC<br/>Subset Granules
+
+
+    %% =========================================================
+    %% Ingestion Initialization
+    %% =========================================================
+
+    User->>O: Start ingestion(user input)
+
+    %% =========================================================
+    %% Authentication
+    %% =========================================================
+
+    O->>A: authenticate(credentials)
+
+    loop Until authenticated or attempts exhausted
+
+        A->>Auth: Authenticate
+        Auth-->>A: Authentication response
+
+        alt Authentication successful
+            A-->>O: Authenticated session
+        else Authentication failed
+            A->>A: Check retry attempts
+
+            alt Attempts remaining
+                A-->>O: Authentication retry required
+            else No attempts remaining
+                A-->>O: Authentication error
+                O-->>User: Ingestion failed
+            end
+        end
+
+    end
+
+
+    %% =========================================================
+    %% Catalog Search
+    %% =========================================================
+
+    O->>C: search(search criteria, session)
+
+    loop Until search succeeds or retry exhausted
+
+        C->>CMR: Search catalog
+        CMR-->>C: Catalog response
+
+        alt Search successful
+            C-->>O: Granule metadata
+        else Search failed
+            C->>C: Evaluate retry policy
+
+            alt Retryable
+                C->>CMR: Retry catalog search
+            else Not retryable
+                C-->>O: Search error
+                O-->>User: Ingestion failed
+            end
+        end
+
+    end
+
+
+    %% =========================================================
+    %% Granule Planning
+    %% =========================================================
+
+    O->>P: plan(granule metadata, ingestion requirements)
+
+    alt No granules found
+        P-->>O: No data
+        O-->>User: No data found
+    else Granules found
+
+        P->>P: Select granules
+        P->>P: Determine retrieval strategy
+
+        alt Full granule retrieval
+
+            P->>P: Create full GranuleJobs
+            P-->>O: GranuleJobs[]
+
+        else Spatial subset retrieval
+
+            P->>P: Create subset GranuleJobs
+            P-->>O: GranuleJobs[]
+
+        end
+
+    end
+
+
+    %% =========================================================
+    %% Concurrent Granule Processing
+    %% =========================================================
+
+    O->>E: execute(GranuleJobs[])
+
+    par Granule Job 1
+
+        E->>G: process(GranuleJob 1)
+
+        G->>D: retrieve(request)
+
+        alt Full granule
+
+            D->>Full: Request full granule
+            Full-->>D: Granule response
+
+        else Spatial subset
+
+            D->>Subset: Request subset granule
+            Subset-->>D: Granule response
+
+        end
+
+        alt Request successful
+
+            D->>D: Download NetCDF
+            D->>D: Write NetCDF to raw landing
+            D-->>G: Data reference
+
+            G->>V: validate(data reference)
+            V-->>G: Validation result
+
+            alt NetCDF valid
+
+                G->>R: record granule success
+                R-->>G: Record confirmed
+                G-->>E: Granule success
+
+            else NetCDF invalid
+
+                alt Validation failure retryable
+
+                    G->>D: retry retrieval
+
+                else Validation failure not retryable
+
+                    G->>R: record granule failure
+                    R-->>G: Record confirmed
+                    G-->>E: Granule failure
+
+                end
+
+            end
+
+        else Request failed
+
+            alt Request failure retryable
+
+                G->>D: retry retrieval
+
+            else Request failure not retryable
+
+                G->>R: record granule failure
+                R-->>G: Record confirmed
+                G-->>E: Granule failure
+
+            end
+
+        end
+
+
+    and Granule Job 2
+
+        E->>G: process(GranuleJob 2)
+
+        G->>D: retrieve(request)
+
+        alt Full granule
+
+            D->>Full: Request full granule
+            Full-->>D: Granule response
+
+        else Spatial subset
+
+            D->>Subset: Request subset granule
+            Subset-->>D: Granule response
+
+        end
+
+        D-->>G: Data reference
+        G->>V: validate(data reference)
+        V-->>G: Validation result
+        G->>R: record granule result
+        G-->>E: Granule result
+
+
+    and Granule Job N
+
+        E->>G: process(GranuleJob N)
+
+        G->>D: retrieve(request)
+
+        alt Full granule
+
+            D->>Full: Request full granule
+            Full-->>D: Granule response
+
+        else Spatial subset
+
+            D->>Subset: Request subset granule
+            Subset-->>D: Granule response
+
+        end
+
+        D-->>G: Data reference
+        G->>V: validate(data reference)
+        V-->>G: Validation result
+        G->>R: record granule result
+        G-->>E: Granule result
+
+    end
+
+
+    %% =========================================================
+    %% Evaluate Overall Ingestion
+    %% =========================================================
+
+    E-->>O: GranuleResults[]
+
+    O->>I: evaluate(GranuleResults[])
+
+    I->>I: Calculate success rate
+
+    alt At least 80% successful
+
+        I-->>O: Successful ingestion
+        O->>R: record ingestion metadata
+        R-->>O: Record confirmed
+        O-->>User: Ingestion successful
+
+    else Less than 80% successful
+
+        I-->>O: Failed ingestion
+        O->>R: record ingestion failure
+        R-->>O: Record confirmed
+        O-->>User: Ingestion failed
+
+    end
+```
