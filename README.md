@@ -19,175 +19,280 @@ The data platform will feature a lakehouse architecture built atop local object 
 **Silver:** _Cleansed, standardized, curated and integrated enterprise data._<br>
 **Gold:** _Business-ready data that has been modeled and optimized for analyics and hydrologic modeling._<br>
 
+### Conceptual Diagram
+
 ```mermaid
-flowchart TB
+---
+config:
+  layout: elk
+  theme: redux
+---
+flowchart TD
 
-    %% ============================================================
-    %% UPSTREAM SOURCES
-    %% ============================================================
+    %% =========================
+    %% Upstream
+    %% =========================
 
-    subgraph SOURCES["Upstream Data Sources"]
-        GOV_GIS["Government<br/>Geospatial APIs"]
-        GOV_TS["Government<br/>Hydrologic APIs"]
-        GOV_MD["Government<br/>Multidimensional Data<br/>(NetCDF, Raster, etc.)"]
+    subgraph upstream["Upstream Scientific Datasets"]
+        u1["Gridded Meteorological<br>Datasets"]
+        u2["Point Meteorological<br>Datasets"]
     end
 
+    %% =========================
+    %% Ingestion
+    %% =========================
 
-    %% ============================================================
-    %% CONTROL / INGESTION PLANE
-    %% ============================================================
-
-    subgraph CONTROL["Control Plane"]
-        AIRFLOW["Apache Airflow<br/>Scheduling & Orchestration"]
-        PYTHON["Python Control &<br/>Pipeline Layer"]
+    subgraph ingestion["Ingestion"]
+        i1["Discovery"]
+        i2["Ingestion Pipelines"]
     end
 
-    AIRFLOW --> PYTHON
+    %% =========================
+    %% Storage
+    %% =========================
 
+    subgraph storage["Storage"]
+        s1["Raw Landing"]
 
-    %% ============================================================
-    %% RAW LANDING
-    %% ============================================================
-
-    subgraph OBJECT["Object Storage — MinIO"]
-        RAW["Raw Landing Zone<br/><i>Immutable upstream data</i>"]
-
-        subgraph LAKEHOUSE["Lakehouse"]
-            BRONZE["Bronze<br/><i>Raw → Parquet + Iceberg</i>"]
-            SILVER["Silver<br/><i>Cleaned, Standardized,<br/>QC'd Data</i>"]
-
-            subgraph GOLD["Gold — Consumer Data Products"]
-                MODEL["Modeler Data Model<br/><i>Hydrologic model inputs</i>"]
-                ANALYST["Analyst Data Model<br/><i>Statistical analysis<br/>& exploration</i>"]
-            end
+        subgraph lakehouse["Lakehouse"]
+            sl1["Bronze"]
+            sl2["Silver"]
+            sl3["Gold"]
         end
     end
 
+    %% =========================
+    %% Processing
+    %% =========================
 
-    %% ============================================================
-    %% TRANSACTIONAL GIS SYSTEM
-    %% ============================================================
-
-    subgraph GIS["Transactional GIS System"]
-        POSTGIS["PostGIS"]
-        KART["Kart<br/><i>Versioned Geospatial Data</i>"]
-        GIS_USERS["GIS Analysts"]
+    subgraph processing["Processing"]
+        p1["Raw → Bronze<br>Validation & Registration"]
+        p2["Bronze → Silver<br>Cleansing, Standardization & Integration"]
+        p3["Silver → Gold<br>Curation, Modeling & Optimization"]
     end
 
-    GIS_USERS -->|"Edit / transform"| POSTGIS
-    KART <-->|"Version control"| POSTGIS
+    %% =========================
+    %% Downstream
+    %% =========================
 
-
-    %% ============================================================
-    %% ICEBERG
-    %% ============================================================
-
-    subgraph ICEBERG["Lakehouse Metadata & Transaction Layer"]
-        CATALOG["Apache Iceberg<br/>Catalog"]
-        METADATA["Iceberg Metadata<br/>Snapshots / Manifests / Schemas"]
+    subgraph downstream["Downstream Users"]
+        d1["Hydrologic Analytics"]
+        d2["Hydrologic Modeling"]
     end
 
-    CATALOG --> METADATA
-    CATALOG -.-> BRONZE
-    CATALOG -.-> SILVER
-    CATALOG -.-> MODEL
-    CATALOG -.-> ANALYST
+    %% =========================
+    %% Control Plane
+    %% =========================
+
+    subgraph control["Platform Operations & Control"]
+        c1["Orchestration"]
+        c2["Observability"]
+    end
+
+    %% =========================
+    %% Metadata & Governance
+    %% =========================
+
+    subgraph governance["Metadata & Governance"]
+        g1["Metadata & Catalog"]
+        g2["Data Quality"]
+        g3["Data Lineage"]
+        g4["Access Control"]
+    end
+
+    %% =========================
+    %% Primary Data Flow
+    %% =========================
+
+    upstream --> ingestion
+    ingestion --> s1
+
+    s1 --> p1
+    p1 --> sl1
+
+    sl1 --> p2
+    p2 --> sl2
+
+    sl2 --> p3
+    p3 --> sl3
+
+    sl3 --> downstream
+
+    %% =========================
+    %% Control Plane Relationships
+    %% =========================
+
+    c1 -. controls .-> ingestion
+    c1 -. controls .-> processing
+    c1 -. controls .-> governance
+
+    c2 -. monitors .-> ingestion
+    c2 -. monitors .-> processing
+    c2 -. monitors .-> storage
+
+    %% =========================
+    %% Metadata & Governance Relationships
+    %% =========================
+
+    g1 -. describes .-> storage
+    g2 -. validates .-> processing
+    g3 -. tracks .-> processing
+    g4 -. governs .-> downstream
+```
+
+### Implementation Diagram
+```mermaid
+---
+config:
+  layout: elk
+  theme: redux
+---
+flowchart TB
+
+    %% =========================
+    %% UPSTREAM
+    %% =========================
+
+    subgraph upstream["Upstream Scientific Datasets"]
+        subgraph gridded["Gridded Meteorological Datasets"]
+            ug1["NASA"]
+            ug2["CA DWR"]
+            ug3["OSU"]
+        end
+
+        subgraph point["Point Meteorological Datasets"]
+            up1["NOAA"]
+            up4["CA DWR"]
+            up5["NIFC"]
+        end
+    end
+
+    
 
 
-    %% ============================================================
-    %% COMPUTE
-    %% ============================================================
+    %% =========================
+    %% ORCHESTRATION
+    %% =========================
 
-    subgraph COMPUTE["Compute / Analytics Layer"]
-        SPARK["Apache Spark<br/><i>Distributed Processing<br/>& Transformations</i>"]
+    subgraph orchestration["Orchestration"]
+        o1["Dagster / Airflow"]
     end
 
 
-    %% ============================================================
-    %% INGESTION FLOWS
-    %% ============================================================
+    %% =========================
+    %% INGESTION
+    %% =========================
 
-    GOV_GIS -->|"API ingestion"| PYTHON
-    GOV_TS -->|"API ingestion"| PYTHON
-    GOV_MD -->|"API ingestion"| PYTHON
-
-    PYTHON -->|"Raw ingestion"| RAW
-
-    %% Geospatial path
-    RAW -->|"Validate / QC"| PYTHON
-    PYTHON -->|"Geospatial ingestion"| POSTGIS
-
-    POSTGIS -->|"Current source of truth"| RAW
-    RAW -->|"Register / transform"| BRONZE
-
-    %% Hydrologic / multidimensional path
-    RAW -->|"Validate / QC / transform"| BRONZE
-
-
-    %% ============================================================
-    %% LAKEHOUSE TRANSFORMATIONS
-    %% ============================================================
-
-    BRONZE -->|"Clean / standardize / QC"| SPARK
-    SPARK --> SILVER
-
-    SILVER -->|"Apply business logic<br/>& consumer modeling"| SPARK
-
-    SPARK --> MODEL
-    SPARK --> ANALYST
-
-
-    %% ============================================================
-    %% DOWNSTREAM USERS
-    %% ============================================================
-
-    subgraph USERS["Downstream Consumers"]
-        MODELERS["Hydrologic Modelers"]
-        ANALYSTS["Hydrologic Analysts"]
+    subgraph ingestion["Ingestion"]
+        i1["Discovery<br>Python + Source APIs"]
+        i2["Ingestion Pipelines<br>Python"]
     end
 
-    MODEL -->|"SQL / Data Access"| MODELERS
-    ANALYST -->|"SQL / Data Access"| ANALYSTS
 
+    %% =========================
+    %% STORAGE
+    %% =========================
 
-    %% ============================================================
-    %% SERVICE / ACCESS LAYER
-    %% ============================================================
+    subgraph storage["Storage — MinIO"]
 
-    subgraph ACCESS["Service & Access Layer — TBD"]
-        SQL["SQL Interface / Query Engine"]
-        API["Application / API Layer"]
+        r1["Raw Landing"]
+
+        subgraph lakehouse["Lakehouse"]
+            sl1["Bronze<br>Apache Iceberg Tables"]
+            sl2["Silver<br>Apache Iceberg Tables"]
+            sl3["Gold<br>Apache Iceberg Tables"]
+        end
+
     end
 
-    MODELERS --> SQL
-    ANALYSTS --> SQL
-    SQL --> MODEL
-    SQL --> ANALYST
 
-    API -.-> SQL
+    %% =========================
+    %% PROCESSING
+    %% =========================
 
+    subgraph processing["Processing"]
 
-    %% ============================================================
-    %% CROSS-CUTTING PLATFORM SERVICES
-    %% ============================================================
+        subgraph spark["Spark Application"]
+            sp["Apache Spark<br>Compute Engine"]
+            ir["Apache Iceberg Runtime"]
+        end
 
-    subgraph PLATFORM["Cross-Cutting Platform Services — TBD"]
-        GOVERNANCE["Governance & Security"]
-        DISCOVERY["Accessibility & Discoverability"]
-        MONITORING["Monitoring & Observability"]
+        py["Python<br>Validation"]
     end
 
-    GOVERNANCE -.-> SOURCES
-    GOVERNANCE -.-> GIS
-    GOVERNANCE -.-> OBJECT
-    GOVERNANCE -.-> USERS
 
-    DISCOVERY -.-> CATALOG
-    DISCOVERY -.-> OBJECT
-    DISCOVERY -.-> USERS
+    %% =========================
+    %% CATALOG
+    %% =========================
 
-    MONITORING -.-> CONTROL
-    MONITORING -.-> COMPUTE
-    MONITORING -.-> OBJECT
-    MONITORING -.-> GIS
+    subgraph catalog["Lakehouse Catalog"]
+        c1["Iceberg Catalog"]
+    end
+
+
+    %% =========================
+    %% ANALYTICS
+    %% =========================
+
+    subgraph analytics["Analytics & Query"]
+        a1["DuckDB"]
+        a2["Apache Spark"]
+    end
+
+
+    %% =========================
+    %% DOWNSTREAM
+    %% =========================
+
+    subgraph downstream["Downstream Users"]
+        d1["Hydrologic Analytics"]
+        d2["Hydrologic Modeling"]
+    end
+
+
+    %% =========================
+    %% PRIMARY DATA FLOW
+    %% =========================
+
+    upstream --> i1
+    i1 --> i2
+    i2 --> r1
+
+    r1 --> py
+    py --> sl1
+
+    sl1 --> sp
+    sp --> sl2
+
+    sl2 --> sp
+    sp --> sl3
+
+    sl3 --> a1
+    sl3 --> a2
+
+    a1 --> downstream
+    a2 --> downstream
+
+
+    %% =========================
+    %% ICEBERG RELATIONSHIPS
+    %% =========================
+
+    sp --> ir
+
+    ir -->|"Reads / writes"| sl1
+    ir -->|"Reads / writes"| sl2
+    ir -->|"Reads / writes"| sl3
+
+    c1 -. "Catalogs" .-> sl1
+    c1 -. "Catalogs" .-> sl2
+    c1 -. "Catalogs" .-> sl3
+
+
+    %% =========================
+    %% ORCHESTRATION
+    %% =========================
+
+    o1 -. "Orchestrates" .-> ingestion
+    o1 -. "Orchestrates" .-> processing
 ```
