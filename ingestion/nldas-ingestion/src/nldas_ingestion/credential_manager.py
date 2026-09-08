@@ -7,7 +7,7 @@ import logging
 import os
 import random
 import tempfile
-import threading
+# import threading
 import time
 from enum import Enum, auto
 from pathlib import Path
@@ -30,10 +30,11 @@ class CredentialManagerError(RuntimeError):
 class CredentialConfigurationError(CredentialManagerError):
     """Raised when required credential configuration is missing or invalid."""
 
+class TokenCacheMissingError(CredentialManagerError):
+    """The configured cache file does not exist."""
 
 class TokenCacheError(CredentialManagerError):
     """Raised when the cached token cannot be read or written safely."""
-
 
 class EarthdataUnavailableError(CredentialManagerError):
     """Raised when Earthdata availability prevents token validation."""
@@ -92,10 +93,8 @@ class CredentialManager:
         self._request_timeout = request_timeout
         self._sleep = sleep
         self._random_value = random_value
-        self._token: str | None = None
-        self._token_valid_state = TokenValidationResult.UNKNOWN
-        self._lock = threading.RLock()
 
+    # Private Access
     @staticmethod
     def _resolve_path(filepath: str | Path) -> Path:
         """Resolve a token path while preserving explicitly absolute paths.
@@ -121,7 +120,7 @@ class CredentialManager:
                 return parent / path
         return Path.cwd() / path
 
-    def _read_cached_token(self) -> str | None:
+    def _read_cached_token(self) -> str:
         """Read and validate the access token stored in the JSON cache.
 
         The cache is assumed to contain an object with a non-empty string
@@ -138,7 +137,7 @@ class CredentialManager:
             does not exist.
         """
         if not self._token_filepath.exists():
-            return None
+            raise TokenCacheMissingError(f"No token cache file exists at {self._token_filepath}.")
         if self._token_filepath.suffix.lower() != ".json":
             raise TokenCacheError("The token cache path must have a .json suffix.")
 
@@ -254,30 +253,6 @@ class CredentialManager:
         else:
             return TokenValidationResult.UNKNOWN
 
-    def _validate_cached_token(self, token: str) -> TokenValidationResult:
-        """Validate a cached token with bounded exponential backoff.
-
-        Validation is assumed to be transiently retryable when the result is
-        ``UNKNOWN``. Invalid tokens are not retried, and an indeterminate
-        result after all attempts is returned to the caller without login.
-
-        Raises:
-            Exceptions from the injected sleep or random-value functions may
-                propagate if those test or scheduling hooks fail.
-
-        Returns:
-            The first ``VALID`` or ``INVALID`` result, or ``UNKNOWN`` after
-            all configured validation attempts fail to determine validity.
-        """
-        for attempt in range(self._max_validation_attempts):
-            state = self._validate_token(token)
-            if state is not TokenValidationResult.UNKNOWN:
-                return state
-            if attempt + 1 < self._max_validation_attempts:
-                delay = min(8.0, 0.5 * (2**attempt))
-                self._sleep(delay + self._random_value() * 0.25)
-        return TokenValidationResult.UNKNOWN
-
     @staticmethod
     def _get_new_token_via_login() -> str: # rename so it's clear we are using login credentials to retrievw a new token from earth data token manager API
         """Acquire a new Earthdata token using environment credentials.
@@ -325,65 +300,44 @@ class CredentialManager:
             raise TokenAcquisitionError("Earthdata login returned no access token.")
         return token.strip()
 
-    def get_token(self) -> str:
-        """Returns a validated cached token or acquires and cache a new one.
+    # Public Access
+    def get_cached_token(self) -> str:
+        """Read a cached NASA EarthData token from disk storage without network validation."""
+        return self._read_cached_token()
 
-        The operation assumes that the configured validation endpoint can
-        authenticate bearer tokens. Access is serialized per manager instance
-        so concurrent threads do not perform duplicate validation or login.
-        An invalid cached token is replaced; an indeterminate validation does
-        not trigger login because the cached token may still be usable.
+    def get_token_from_login(self) -> str:
+        """Acquire a new token using Earthdata login credentials."""
+        return self._get_new_token_via_login()
 
-        Raises:
-            TokenCacheError: If an existing cache is malformed or cannot be
-                written.
-            EarthdataUnavailableError: If token validation remains unknown
-                after all retries.
-            CredentialConfigurationError: If replacement requires login and
-                login credentials are missing.
-            TokenAcquisitionError: If a replacement token cannot be acquired.
+    def validate_token(self, token: str) -> TokenValidationResult:
+          """Validate a cached token with bounded exponential backoff.
+  
+          Validation is assumed to be transiently retryable when the result is
+          ``UNKNOWN``. Invalid tokens are not retried, and an indeterminate
+          result after all attempts is returned to the caller without login.
+  
+          Raises:
+              Exceptions from the injected sleep or random-value functions may
+                  propagate if those test or scheduling hooks fail.
+  
+          Returns:
+              The first ``VALID`` or ``INVALID`` result, or ``UNKNOWN`` after
+              all configured validation attempts fail to determine validity.
+          """
+          for attempt in range(self._max_validation_attempts):
+              state = self._validate_token(token)
+              if state is not TokenValidationResult.UNKNOWN:
+                  return state
+              if attempt + 1 < self._max_validation_attempts:
+                  delay = min(8.0, 0.5 * (2**attempt))
+                  self._sleep(delay + self._random_value() * 0.25)
+          return TokenValidationResult.UNKNOWN
 
-        Returns:
-            A validated Earthdata access-token string.
-        """
-        with self._lock:
-            if (
-                self._token
-                and self._token_valid_state is TokenValidationResult.VALID
-            ):
-                return self._token
-
-            cached_token = self._read_cached_token()
-            if cached_token:
-                state = self._validate_cached_token(cached_token)
-                self._token_valid_state = state
-                if state is TokenValidationResult.VALID:
-                    self._token = cached_token
-                    return cached_token
-                if state is TokenValidationResult.UNKNOWN:
-                    raise EarthdataUnavailableError(
-                        "Earthdata server availability prevented token validation."
-                    )
-
-            token = self._get_new_token_via_login()
-            self._write_cached_token(token)
-            self._token = token
-            self._token_valid_state = TokenValidationResult.VALID
-            return token
-
-    def is_token_valid(self) -> bool:
-        """Reports whether this instance currently holds a validated token.
-
-        This method assumes that validity reflects the manager's most recent
-        successful validation or token acquisition; it does not make a new
-        network request.
-
-        Returns:
-            ``True`` when the current token state is ``VALID``; otherwise
-            ``False``.
-        """
-        return self._token_valid_state is TokenValidationResult.VALID
+    def update_cached_token(self, token: str) -> None:
+        """Atomically write a token to the cache."""
+        self._write_cached_token(token=token)
 
 if __name__ == "__main__":
     # Test the module
-    print("Testing credntial_manager2.py")
+    print("Testing credntial_manager.py")
+    
