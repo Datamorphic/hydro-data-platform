@@ -112,11 +112,11 @@ class CredentialManager:
         """
         path = Path(filepath).expanduser()
         if path.is_absolute():
-            return path
+            return path.resolve()
 
         project_root = Path(__file__).resolve()
         for parent in project_root.parents:
-            if (parent / ".git").exists():
+            if (parent / "pyproject.toml").exists():
                 return parent / path
         return Path.cwd() / path
 
@@ -144,7 +144,7 @@ class CredentialManager:
         try:
             with self._token_filepath.open("r", encoding="utf-8") as token_file:
                 payload = json.load(token_file)
-        except (OSError, json.JSONDecodeError) as error:
+        except Exception as error:
             raise TokenCacheError(
                 f"Unable to read token cache {self._token_filepath}."
             ) from error
