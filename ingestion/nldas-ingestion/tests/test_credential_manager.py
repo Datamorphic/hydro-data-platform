@@ -6,10 +6,10 @@ import requests
 from pytest_mock import MockerFixture
 from json import JSONDecodeError
 
-import nldas_ingestion.credential_manager as credential_manager_module
-from nldas_ingestion.credential_manager import (
-    CredentialManager,
-    CredentialManagerError,
+import nldas_ingestion.infrastructure.credentials.earthdata_token_provider as credential_manager_module
+from nldas_ingestion.infrastructure.credentials.earthdata_token_provider import (
+    EarthDataCredentialProvider,
+    CredentialProviderError,
     CredentialConfigurationError,
     TokenCacheMissingError,
     TokenCacheError,
@@ -19,8 +19,8 @@ from nldas_ingestion.credential_manager import (
 
 
 @pytest.fixture
-def manager(tmp_path: Path) -> CredentialManager:
-    return CredentialManager(token_filepath=tmp_path / "token.json")
+def manager(tmp_path: Path) -> EarthDataCredentialProvider:
+    return EarthDataCredentialProvider(token_filepath=tmp_path / "token.json")
 
 
 class TestCredentialManager:
@@ -33,7 +33,7 @@ class TestCredentialManager:
             project_root.mkdir()
             return project_root
 
-        def test_relative_path_with_parent_toml(self, manager: CredentialManager, monkeypatch, fake_project_root: Path):
+        def test_relative_path_with_parent_toml(self, manager: EarthDataCredentialProvider, monkeypatch, fake_project_root: Path):
             # Arrange
             filepath = "path/to/file.json"
             (fake_project_root / "pyproject.toml").touch()
@@ -52,7 +52,7 @@ class TestCredentialManager:
             # Assert
             assert result == fake_project_root / filepath
 
-        def test_relative_path_without_parent_toml(self, manager: CredentialManager, monkeypatch, fake_project_root: Path):
+        def test_relative_path_without_parent_toml(self, manager: EarthDataCredentialProvider, monkeypatch, fake_project_root: Path):
             # Arrange
             filepath = "path/to/file.json"
             fake_module_file = fake_project_root / "src" / "nldas_ingestion" / "credential_manager.py"
@@ -72,11 +72,11 @@ class TestCredentialManager:
             # Assert
             assert result == fake_project_root / filepath
 
-        def test_invalid_input_type(self, manager: CredentialManager):
+        def test_invalid_input_type(self, manager: EarthDataCredentialProvider):
             with pytest.raises(TypeError):
                 manager._resolve_path(1)  # type: ignore[arg-type]
 
-        def test_absolute_path(self, manager: CredentialManager):
+        def test_absolute_path(self, manager: EarthDataCredentialProvider):
             filepath = "C:/Users/User/project_root/secrets/file.json"
 
             result = manager._resolve_path(filepath)
@@ -94,20 +94,20 @@ class TestCredentialManager:
         class UnexpectedJsonLoadError(RuntimeError):
             pass
 
-        def test_missing_file_exception(self, manager: CredentialManager, token_folder: Path):            
+        def test_missing_file_exception(self, manager: EarthDataCredentialProvider, token_folder: Path):            
             manager._token_filepath = token_folder / "token.json"
 
             with pytest.raises(TokenCacheMissingError):
                 manager._read_cached_token()
 
-        def test_non_json_file_exception(self, manager: CredentialManager, token_folder: Path):
+        def test_non_json_file_exception(self, manager: EarthDataCredentialProvider, token_folder: Path):
             manager._token_filepath = token_folder / "token.txt"
             manager._token_filepath.touch()
 
             with pytest.raises(TokenCacheError):
                 manager._read_cached_token()
 
-        def test_json_os_error(self, manager: CredentialManager, token_folder: Path, mocker: MockerFixture):
+        def test_json_os_error(self, manager: EarthDataCredentialProvider, token_folder: Path, mocker: MockerFixture):
             manager._token_filepath = token_folder / "token.json"
             manager._token_filepath.touch()
             mock_json_load = mocker.patch("nldas_ingestion.credential_manager.json.load")
@@ -122,7 +122,7 @@ class TestCredentialManager:
             assert opened_file.name == str(manager._token_filepath)
             assert opened_file.mode == "r"
 
-        def test_json_decode_error(self, manager: CredentialManager, token_folder: Path, mocker: MockerFixture):
+        def test_json_decode_error(self, manager: EarthDataCredentialProvider, token_folder: Path, mocker: MockerFixture):
             manager._token_filepath = token_folder / "token.json"
             manager._token_filepath.touch()
             mock_json_load = mocker.patch("nldas_ingestion.credential_manager.json.load")
@@ -134,7 +134,7 @@ class TestCredentialManager:
             assert isinstance(raised.value.__cause__,JSONDecodeError)
             mock_json_load.assert_called_once()
 
-        def test_unexpected_json_load_exception(self, manager: CredentialManager, token_folder: Path, mocker: MockerFixture):
+        def test_unexpected_json_load_exception(self, manager: EarthDataCredentialProvider, token_folder: Path, mocker: MockerFixture):
             """How 'SUT' handles errors other than OSError and josn.JSONDecodeError caused by json.load()"""
             manager._token_filepath = token_folder / "token.json"
             manager._token_filepath.touch()
@@ -147,7 +147,7 @@ class TestCredentialManager:
             assert isinstance(raised.value.__cause__, self.UnexpectedJsonLoadError)
             mock_json_load.assert_called_once()
 
-        def test_invalid_type_for_cached_token_exception(self, manager: CredentialManager, token_folder: Path, mocker: MockerFixture):
+        def test_invalid_type_for_cached_token_exception(self, manager: EarthDataCredentialProvider, token_folder: Path, mocker: MockerFixture):
             """Catches non string tokens as an exception"""
 
             manager._token_filepath = token_folder / "token.json"
@@ -174,13 +174,13 @@ class TestCredentialManager:
                 "token",
             ],
         )
-        def test_invalid_cached_token_payloads(self, manager: CredentialManager, payload):
+        def test_invalid_cached_token_payloads(self, manager: EarthDataCredentialProvider, payload):
             manager._token_filepath.write_text(json.dumps(payload), encoding="utf-8")
 
             with pytest.raises(TokenCacheError):
                 manager.get_cached_token()
 
-        def test_valid_cached_token_is_read_and_stripped(self, manager: CredentialManager):
+        def test_valid_cached_token_is_read_and_stripped(self, manager: EarthDataCredentialProvider):
             manager._token_filepath.write_text(
                 '{"access_token": "  Y123ZX70  "}', encoding="utf-8"
             )
@@ -188,7 +188,7 @@ class TestCredentialManager:
             assert manager.get_cached_token() == "Y123ZX70"
 
     class TestWriteCachedToken:
-        def test_writes_json_and_creates_parent_directory(self, manager: CredentialManager):
+        def test_writes_json_and_creates_parent_directory(self, manager: EarthDataCredentialProvider):
             manager._token_filepath = manager._token_filepath.parent / "nested" / "token.json"
 
             manager.update_cached_token("Y123ZX70")
@@ -200,7 +200,7 @@ class TestCredentialManager:
             assert not list(manager._token_filepath.parent.glob("*.tmp"))
 
         def test_replace_failure_is_wrapped_and_temporary_file_removed(
-            self, manager: CredentialManager, mocker: MockerFixture
+            self, manager: EarthDataCredentialProvider, mocker: MockerFixture
         ):
             replace = mocker.patch(
                 "nldas_ingestion.credential_manager.os.replace",
@@ -215,7 +215,7 @@ class TestCredentialManager:
             assert not list(manager._token_filepath.parent.glob("*.tmp"))
 
         def test_permission_failure_does_not_prevent_replacement(
-            self, manager: CredentialManager, mocker: MockerFixture
+            self, manager: EarthDataCredentialProvider, mocker: MockerFixture
         ):
             mocker.patch(
                 "nldas_ingestion.credential_manager.os.chmod",
@@ -237,7 +237,7 @@ class TestCredentialManager:
                 (500, TokenValidationResult.UNKNOWN),
             ],
         )
-        def test_status_codes(self, manager: CredentialManager, mocker: MockerFixture, status_code, expected):
+        def test_status_codes(self, manager: EarthDataCredentialProvider, mocker: MockerFixture, status_code, expected):
             response = mocker.Mock(status_code=status_code)
             request = mocker.patch.object(requests, "get", return_value=response)
 
@@ -252,7 +252,7 @@ class TestCredentialManager:
                 timeout=manager._request_timeout,
             )
 
-        def test_request_failure_returns_unknown(self, manager: CredentialManager, mocker: MockerFixture):
+        def test_request_failure_returns_unknown(self, manager: EarthDataCredentialProvider, mocker: MockerFixture):
             mocker.patch.object(requests, "get", side_effect=requests.RequestException)
 
             assert manager._validate_token("token") is TokenValidationResult.UNKNOWN
@@ -263,14 +263,14 @@ class TestCredentialManager:
             monkeypatch.delenv("EARTHDATA_PASSWORD", raising=False)
 
             with pytest.raises(CredentialConfigurationError):
-                CredentialManager._get_new_token_via_login()
+                EarthDataCredentialProvider._get_new_token_via_login()
 
         def test_missing_one_credential(self, monkeypatch):
             monkeypatch.setenv("EARTHDATA_USERNAME", "user")
             monkeypatch.delenv("EARTHDATA_PASSWORD", raising=False)
 
             with pytest.raises(CredentialConfigurationError, match="EARTHDATA_PASSWORD"):
-                CredentialManager._get_new_token_via_login()
+                EarthDataCredentialProvider._get_new_token_via_login()
 
         def test_successful_login_strips_token(self, monkeypatch, mocker: MockerFixture):
             monkeypatch.setenv("EARTHDATA_USERNAME", "user")
@@ -281,7 +281,7 @@ class TestCredentialManager:
                 return_value=mocker.Mock(token={"access_token": "  token  "}),
             )
 
-            assert CredentialManager._get_new_token_via_login() == "token"
+            assert EarthDataCredentialProvider._get_new_token_via_login() == "token"
             login.assert_called_once_with(strategy="environment")
 
         @pytest.mark.parametrize("token", [None, "", "   ", 1234])
@@ -295,7 +295,7 @@ class TestCredentialManager:
             )
 
             with pytest.raises(TokenAcquisitionError):
-                CredentialManager._get_new_token_via_login()
+                EarthDataCredentialProvider._get_new_token_via_login()
 
         def test_login_failure_is_wrapped(self, monkeypatch, mocker: MockerFixture):
             monkeypatch.setenv("EARTHDATA_USERNAME", "user")
@@ -305,12 +305,12 @@ class TestCredentialManager:
             )
 
             with pytest.raises(TokenAcquisitionError) as raised:
-                CredentialManager._get_new_token_via_login()
+                EarthDataCredentialProvider._get_new_token_via_login()
 
             assert isinstance(raised.value.__cause__, RuntimeError)
 
     class TestValidateTokenPublic:
-        def test_valid_token_does_not_retry(self, manager: CredentialManager, mocker: MockerFixture):
+        def test_valid_token_does_not_retry(self, manager: EarthDataCredentialProvider, mocker: MockerFixture):
             validate = mocker.patch.object(
                 manager, "_validate_token", return_value=TokenValidationResult.VALID
             )
@@ -321,7 +321,7 @@ class TestCredentialManager:
             validate.assert_called_once_with("token")
             sleep.assert_not_called()
 
-        def test_invalid_token_does_not_retry(self, manager: CredentialManager, mocker: MockerFixture):
+        def test_invalid_token_does_not_retry(self, manager: EarthDataCredentialProvider, mocker: MockerFixture):
             validate = mocker.patch.object(
                 manager, "_validate_token", return_value=TokenValidationResult.INVALID
             )
@@ -329,7 +329,7 @@ class TestCredentialManager:
             assert manager.validate_token("token") is TokenValidationResult.INVALID
             validate.assert_called_once_with("token")
 
-        def test_unknown_retries_with_exponential_backoff_and_jitter(self, manager: CredentialManager, mocker: MockerFixture):
+        def test_unknown_retries_with_exponential_backoff_and_jitter(self, manager: EarthDataCredentialProvider, mocker: MockerFixture):
             manager._max_validation_attempts = 3
             manager._random_value = lambda: 0.0
             validate = mocker.patch.object(
@@ -342,7 +342,7 @@ class TestCredentialManager:
             assert validate.call_count == 3
             assert [call.args[0] for call in sleep.call_args_list] == [0.5, 1.0]
 
-        def test_unknown_stops_when_later_attempt_succeeds(self, manager: CredentialManager, mocker: MockerFixture):
+        def test_unknown_stops_when_later_attempt_succeeds(self, manager: EarthDataCredentialProvider, mocker: MockerFixture):
             manager._max_validation_attempts = 3
             manager._random_value = lambda: 0.0
             validate = mocker.patch.object(
