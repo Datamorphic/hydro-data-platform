@@ -1,4 +1,5 @@
-import nldas_ingestion.infrastructure.credentials.errors as err
+from typing import (Mapping)
+import nldas_ingestion.infrastructure.credentials.exceptions as err
 
 class EarthDataTokenRetriever:
 
@@ -29,21 +30,40 @@ class EarthDataTokenRetriever:
         """
         try:
             import earthaccess
-        except ImportError as error:
-            raise EnvironmentError(
-                "`earthaccess` package is required to acquire a new Earthdata token."
-            ) from error
+            from earthaccess.exceptions import LoginAttemptFailure
+        except ImportError as exc:
+            raise err.TokenConfigurationError(
+                "`earthaccess` package is required for `EarthdataTokenRetriever` to acquire a new Earthdata token."
+            ) from exc
 
         try:
-            auth = earthaccess.login(strategy="environment")
-        except Exception as error:
-            raise err.TokenRetrievalServerError("Earthdata login failed.") from error
+            auth: earthaccess.Auth = earthaccess.login(strategy="environment")
+            
+        except LoginAttemptFailure as exc:
+            raise err.TokenConfigurationError(
+                "Token retrieval failed due to invalid login credentials. " +
+                "Check `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` in environment."
+            ) from exc
+        except Exception as exc: # TODO: Destinguish between bad credentails and server issue
+            raise err.TokenServiceUnavailableError(
+                "Token retrieval failed expectedly due to unexpected Earthdata server failure"
+            ) from exc
 
-        try:
-            token = auth.token.get("access_token")
-        except Exception as error:
-            raise err.TokenRetrievalServerError("Earthdata failed to provide an access token.")
 
-        if not isinstance(token, str) or not token.strip():
-            raise err.TokenRetrievalServerError("Earthdata login returned no access token.")
+        try:        
+            token_response: Mapping[str, str] | None = auth.token
+            if token_response is None:
+                raise ValueError("Earthdata authentication server responded without a token.")
+            
+            token = token_response.get("access_token")
+            if token is None:
+                raise ValueError("Earthdata authentication server responded with empty token.")
+            if not isinstance(token, str) or not token.strip():
+                raise TypeError("Provided Earthdata token is not a string.")
+
+        except Exception as exc: # TODO: More specific error translation?
+            raise err.TokenServiceUnavailableError(
+                "Token retrieval service failed unexpectedly with invalid token response."
+            ) from exc
+
         return token.strip()

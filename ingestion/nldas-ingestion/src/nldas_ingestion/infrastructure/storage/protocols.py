@@ -49,21 +49,62 @@ class StorageClient(Protocol):
 class ObjectStore(Protocol):
 
     def get(self, key: str) -> bytes: # what is the return type? Does it depend on the object type?
-        """For small objects such as tokens."""
+        """For small objects such as tokens.
+        
+        Exceptions:
+            `StorageObjectMissingError`: when the requested object or its bucket does not exist.
+            `StoragePermissionError`: when the credentials lack permission for the operation.
+            `StorageUnavailableError`: when the storage service cannot currently be reached.
+            `StorageRequestError`: when the storage request was invalid or could not be fulfilled as requested.
+            `StorageServiceError`: when the storage service returned an unclassified error.
+        """
         ...
 
     def get_stream(self, key: str) -> AbstractContextManager[BinaryIO]:
-        """For large objects such as NetCDF files."""
+        """For large objects such as NetCDF files.
+        
+        Exceptions:
+            `StorageObjectMissingError`: when the requested object or its bucket does not exist.
+            `StoragePermissionError`: when the credentials lack permission for the operation.
+            `StorageUnavailableError`: when the storage service cannot currently be reached.
+            `StorageRequestError`: when the storage request was invalid or could not be fulfilled as requested.
+            `StorageServiceError`: when the storage service returned an unclassified error.
+        """
         ...
 
-    def put(self, key: str, data: bytes) -> None: # what is the return type (probably none or a task or resource identifier).
-        """For small objects."""
+    def put(self, key: str, data: bytes, content_type: str) -> None: # what is the return type (probably none or a task or resource identifier).
+        """Operation for writting small objects.
+
+        Exceptions:            
+            `StorageObjectMissingError`: when the configured bucket/container does not exist.
+            `StoragePermissionError`: when the credentials lack permission for the operation.
+            `StorageUnavailableError`: when the storage service cannot currently be reached.
+            `StorageRequestError`: when the storage request was invalid or could not be fulfilled as requested.
+            `StorageServiceError`: when the storage service returned an unclassified error.
+        """
         ...
 
-    def put_stream(self, key: str, data: BinaryIO, length: int) -> None:
-        """For large or already-streamed objects."""
+    def put_stream(self, key: str, data: BinaryIO, length: int, content_type: str) -> None:
+        """Operation for writting large or already-streamed objects.
+
+        Exceptions:            
+            `StorageObjectMissingError`: when the configured bucket/container does not exist.
+            `StoragePermissionError`: when the credentials lack permission for the operation.
+            `StorageUnavailableError`: when the storage service cannot currently be reached.
+            `StorageRequestError`: when the storage request was invalid or could not be fulfilled as requested.
+            `StorageServiceError`: when the storage service returned an unclassified error.
+        """
         ...
 
     def delete(self, key: str) -> None: # any return type, probably not except for a task or resource identifier
+        """Operation for deleting objects from storage.
+        
+        Exceptions:            
+            `StorageObjectMissingError`: when the configured bucket/container or object does not exist.
+            `StoragePermissionError`: when the credentials lack permission for the operation.
+            `StorageUnavailableError`: when the storage service cannot currently be reached.
+            `StorageRequestError`: when the storage request was invalid or could not be fulfilled as requested.
+            `StorageServiceError`: when the storage service returned an unclassified error.
+        """
         ...
 

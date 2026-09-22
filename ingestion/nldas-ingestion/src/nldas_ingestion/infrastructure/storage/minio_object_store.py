@@ -82,26 +82,26 @@ class MinioObjectStore:
         )
 
 if __name__ == "__main__":
-
+    print()
     # example composition
-    from nldas_ingestion.infrastructure.storage.minio_storage_client import MinioStorageClient
+    # from nldas_ingestion.infrastructure.storage.minio_storage_client import MinioStorageClient
 
-    client = MinioStorageClient(
-        endpoint="localhost:9000",
-        access_key="minioadmin",
-        secret_key="minioadmin",
-    )
+    # client = MinioStorageClient(
+    #     endpoint="localhost:9000",
+    #     access_key="minioadmin",
+    #     secret_key="minioadmin",
+    # )
 
-    payload = b'these are some bytes'
+    # payload = b'these are some bytes'
 
-    object_store = MinioObjectStore(
-        client=client,
-        bucket_name="nldas"
-    )
+    # object_store = MinioObjectStore(
+    #     client=client,
+    #     bucket_name="nldas"
+    # )
 
-    object_store.put(
-        key="partition1/object1.json",
-        data=payload,
-        content_type="application/json"
-    )
+    # object_store.put(
+    #     key="partition1/object1.json",
+    #     data=payload,
+    #     content_type="application/json"
+    # )
 

@@ -1,12 +1,12 @@
-import shutil
+from dataclasses import dataclass
+from typing import (BinaryIO, cast, Dict, List, Tuple, NoReturn)
+from contextlib import AbstractContextManager
 from minio import Minio
 from minio.error import S3Error
-from typing import (BinaryIO, Optional, cast, Dict, List, Tuple)
-from contextlib import AbstractContextManager
-from dataclasses import dataclass
+from minio.helpers import ObjectWriteResult
 # import io # io.BytesIO(bytes) -> BytesIO class which passes BinaryIO protocol class
 from nldas_ingestion.infrastructure.storage.protocols import ObjectPutResponse
-
+import nldas_ingestion.infrastructure.storage.exceptions as err
 
 class MinioStorageClient:
 
@@ -34,13 +34,23 @@ class MinioStorageClient:
                 bucket_name = bucket_name,
                 object_name = object_name
             )
-        except Exception as e:
-            raise RuntimeError("Error getting data from object storage.") from e # TODO: Create custom exception class for retrieval
-
+        except S3Error as exc:
+            raise_translated_minio_s3_error(
+                s3_error=exc,
+                bucket_name=bucket_name,
+                object_name=object_name
+            )
+        except Exception as exc:
+            raise err.StorageServiceError(
+                f"Minio storage client failed unexpectedly while getting object {bucket_name}/{object_name}."
+            )
+            
         try:
             return response.read() # extract bytes to memory as opposed to maintaining stream
-        except Exception as e:
-            raise RuntimeError("Minio server response is missing content.") # TODO: Create a custom exception class here for Minio Networking issues
+        except Exception as error:
+            raise err.StorageServiceError(
+                f"Minio storage client failed unexpectedly while reading object {bucket_name}/{object_name}"
+            ) from error
         finally: # happens after try or exception block (return result is held)
             response.close()
             response.release_conn()
@@ -53,15 +63,11 @@ class MinioStorageClient:
         """Returns a context manager that produces a BinarIO object
         ***Best used with a `with` code block***
         """
-        try:
-            response = MinioObjectStreamContext(
-                client=self._mio,
-                bucket_name=bucket_name,
-                object_name=object_name
-            )
-        except Exception as e:
-            raise RuntimeError("Error retriving data from object store") from e # NOTE: Add custom exception class for Minio networking
-
+        response = MinioObjectStreamContext(
+            client=self._mio,
+            bucket_name=bucket_name,
+            object_name=object_name
+        )
         return response
 
     def put_object(
@@ -77,16 +83,25 @@ class MinioStorageClient:
         Uploads data to object storage and returns an object put response.
         """
         try:
-            result = (self._mio
+            result: ObjectWriteResult = (
+                self._mio
                 .put_object(
                     bucket_name=bucket_name,
                     object_name=object_name,
                     data=data,
                     length=length,
                     content_type=content_type
-                ))
-        except Exception as e:
-            raise RuntimeError("Error putting data into object store.") from e # TODO: Make custom Runtime exception class
+            ))
+        except S3Error as exc:
+            raise_translated_minio_s3_error(
+                s3_error=exc,
+                bucket_name=bucket_name,
+                object_name=object_name
+            )
+        except Exception as exc:
+            raise err.StorageServiceError(
+                f"Minio storage client failed unexpectedly while putting object {bucket_name}/{object_name}."
+            )
 
         return MinioObjectPutResponse(
             object_name=result.object_name,
@@ -106,8 +121,79 @@ class MinioStorageClient:
                 bucket_name=bucket_name,
                 object_name=object_name
             )
-        except Exception as e:
-            raise RuntimeError("Error removing object from object store") from e # NOTE: Add custom exception class for Minio networking
+        except S3Error as exc:
+            raise_translated_minio_s3_error(
+                s3_error=exc,
+                bucket_name=bucket_name,
+                object_name=object_name
+            )
+        except Exception as exc:
+            raise err.StorageServiceError(
+                f"Minio storage client failed unexpectedly while deleting object {bucket_name}/{object_name}."
+            )
+
+
+def raise_translated_minio_s3_error(
+    s3_error: S3Error,
+    bucket_name: str,
+    object_name: str,
+) -> NoReturn:
+    """
+    Translates the `minio.error.S3Error` using domain logic to produce the following ***Exceptions***:
+        `StorageObjectMissingError`: When the object is missing from storage.<br>
+        `StoragePermissionError`: When the credentials lack permission for the storage operation.<br>
+        `StorageBucketMissingError`: When the specified `bucket_name` does not exist in the storage server.<br>
+        `StorageUnavailableError`: When storage service cannot currently be reached or is offline.<br>
+    """
+
+    if s3_error.code in {"NoSuchKey", "NoSuchObject"}:
+        raise err.StorageObjectMissingError(
+            f"Object does not exist: {bucket_name}/{object_name}"
+        ) from s3_error
+
+    if s3_error.code in {
+        "AccessDenied",
+        "InvalidAccessKeyId",
+        "SignatureDoesNotMatch",
+        "InvalidToken",
+        "ExpiredToken",
+    }:
+        raise err.StoragePermissionError(
+            "Object storage rejected the configured credentials."
+        ) from s3_error
+
+    if s3_error.code == "NoSuchBucket":
+        raise err.StorageObjectMissingError(
+            f"Bucket does not exist: {bucket_name}"
+        ) from s3_error
+
+    if s3_error.code in {
+        "InternalError",
+        "ServiceUnavailable",
+        "SlowDown",
+        "RequestTimeout",
+    }:
+        raise err.StorageUnavailableError(
+            "Object storage returned a temporary service error."
+        ) from s3_error
+
+    if s3_error.code in {
+        "InvalidBucketName",
+        "InvalidArgument",
+        "InvalidRequest",
+        "EntityTooSmall",
+        "EntityTooLarge",
+        "MalformedXML",
+        "InvalidDigest",
+    }:
+        raise err.StorageRequestError(
+            f"Object storage rejected the request for {bucket_name}/{object_name}."
+        ) from s3_error
+
+    raise err.StorageServiceError(
+        f"Object storage returned an unclassified S3 error for "
+        f"{bucket_name}/{object_name}: {s3_error.code}"
+    ) from s3_error
 
 
 @dataclass
@@ -134,14 +220,25 @@ class MinioObjectStreamContext():
         self._response = None
 
     def __enter__(self) -> BinaryIO:
-        
-        self._response = (
-            self._client
-            .get_object(
+
+        try:
+            self._response = (
+                self._client
+                .get_object(
+                    bucket_name=self._bucket_name,
+                    object_name=self._object_name
+                )
+            )
+        except S3Error as exc:
+            raise_translated_minio_s3_error(
+                s3_error=exc,
                 bucket_name=self._bucket_name,
                 object_name=self._object_name
             )
-        )
+        except Exception as exc:
+            raise err.StorageServiceError(
+                f"Object storage rejected the request for {self._bucket_name}/{self._object_name}."
+            )
                 
         # MinIO's response is stream-like, but its SDK type may not be
         # declared as BinaryIO. The cast only informs the type checker.
@@ -155,7 +252,6 @@ class MinioObjectStreamContext():
     ) -> None:
         if self._response is None:
             return
-
         try:
             self._response.close()
         finally:

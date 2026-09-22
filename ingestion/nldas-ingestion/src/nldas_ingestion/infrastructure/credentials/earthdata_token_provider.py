@@ -7,7 +7,7 @@ from nldas_ingestion.infrastructure.credentials.earthdata_token_store import Ear
 from nldas_ingestion.infrastructure.credentials.earthdata_token_validator import EarthDataTokenValidator
 from nldas_ingestion.infrastructure.credentials.earthdata_token_retriever import EarthDataTokenRetriever
 from nldas_ingestion.infrastructure.credentials.protocols import TokenValidationResult
-import nldas_ingestion.infrastructure.credentials.errors as err
+import nldas_ingestion.infrastructure.credentials.exceptions as err
 
 
 LOGGER = logging.getLogger(__name__)
@@ -43,37 +43,24 @@ class EarthDataTokenProvider:
 
         """
         try:
-            token = self._token_store.get_token() # TODO: Specify custom errors to destinguish between whether the cash is empty (except and set token to None) vs if it is missing (throw error for misconfiguration)
-        except Exception as error:
+            token = self._token_store.get_token()
+        except err.TokenCacheMissingError:
             token = None
 
         if token is not None:   
             token_state = self._token_validator.validate_token(token)
-            if token_state is TokenValidationResult.UNKNOWN:
-                raise err.TokenValidationServerError(
-                    "Earthdata server availability prevented token validation."
-                )
-            elif token_state is TokenValidationResult.VALID:
+            if token_state is TokenValidationResult.VALID:
                 return token
+            if token_state is TokenValidationResult.INVALID:
+                token = None
+            else: # TokenValidationResult.UNKNOWN:
+                raise err.TokenServiceUnavailableError("Token validation service unavailable")
 
         token = self._token_retriever.retrieve_token()
         self._token_store.put_token(token)
         return token
-            
+
 
 if __name__ == "__main__":
-    #####################
-    # Example composition
-    #####################
-    earthdata_token_store = EarthDataTokenStore(Path("path/to/store"))
-    earthdata_token_validator = EarthDataTokenValidator()
-    earthdata_token_retriever = EarthDataTokenRetriever("username", "password")
-    earthdata_token_provider = EarthDataTokenProvider(
-        token_store=earthdata_token_store,
-        token_validator=earthdata_token_validator,
-        token_retriever=earthdata_token_retriever
-    )
-
-    token = earthdata_token_provider.get_token()
-    print(token)
+    print("Your running earthdata_token_provider.py as an entry point.")
     
