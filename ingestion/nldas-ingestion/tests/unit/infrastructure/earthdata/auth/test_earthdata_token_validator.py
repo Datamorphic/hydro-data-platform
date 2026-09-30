@@ -3,9 +3,9 @@ from pytest_mock import MockerFixture
 from unittest.mock import Mock
 import builtins
 import os
-from nldas_ingestion.infrastructure.credentials.earthdata_token_validator import EarthDataTokenValidator
-import nldas_ingestion.infrastructure.credentials.exceptions as TokenError
-from nldas_ingestion.infrastructure.credentials.protocols import TokenValidationResult
+from nldas_ingestion.infrastructure.earthdata.auth.earthdata_token_validator import EarthDataTokenValidator
+import nldas_ingestion.infrastructure.earthdata.auth.exceptions as TokenError
+from nldas_ingestion.infrastructure.earthdata.auth.protocols import TokenValidationResult
 
 
 @pytest.fixture
