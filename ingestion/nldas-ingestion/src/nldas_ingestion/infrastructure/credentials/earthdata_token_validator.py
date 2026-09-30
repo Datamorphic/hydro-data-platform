@@ -14,7 +14,7 @@ class EarthDataTokenValidator:
         self._max_attempts = max_attempts
         self._request_timeout = request_timeout
 
-    def _validate_token(self, token: str) -> TokenValidationResult:
+    def validate_token_routine(self, token: str) -> TokenValidationResult:
         """
         Check whether an access token is accepted by the validation API.
 
@@ -53,9 +53,9 @@ class EarthDataTokenValidator:
             # LOGGER.warning("Earthdata token validation request failed.", exc_info=True)
             return TokenValidationResult.UNKNOWN
 
-        if response.status_code in (401, 403):
+        if response.status_code in (401, 403): # TODO: Handle any and all 4xx (Client Errors) responses, as well as 3xx (Redirection) and 5xx (Server Error)
             return TokenValidationResult.INVALID
-        elif response.status_code == 200:
+        elif response.status_code == 200: # (Success)
             return TokenValidationResult.VALID
         else:
             return TokenValidationResult.UNKNOWN
@@ -68,7 +68,7 @@ class EarthDataTokenValidator:
         from random import random
 
         for attempt in range(self._max_attempts):
-            state = self._validate_token(token)
+            state = self.validate_token_routine(token)
             if state is not TokenValidationResult.UNKNOWN:
                 return state
             if attempt + 1 < self._max_attempts:
