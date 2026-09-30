@@ -256,7 +256,6 @@ graph TD
 Shows the flow of a program between components over time. The order of event happen from top to bottom.
 
 ```mermaid
-
 ---
 config:
   theme: redux
