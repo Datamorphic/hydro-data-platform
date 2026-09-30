@@ -16,6 +16,9 @@ class TokenError(Exception):
 class TokenCacheMissingError(TokenError):
     """Raised when a token is missing from cache."""
 
+class TokenCacheMalformedError(TokenCacheMissingError):
+    """Raised when the token cache exists, but has invalid contents."""
+
 class TokenServiceUnavailableError(TokenError):
     """Raised when a token service is unavailable/offline. Includes storage, retrieval, and validation services"""
 
@@ -24,3 +27,4 @@ class TokenConfigurationError(TokenError):
     token servercies is invalid or when requests sent to
     the services are malformed or the information is out of date.
     """
+

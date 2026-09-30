@@ -3,14 +3,8 @@ import nldas_ingestion.infrastructure.credentials.exceptions as err
 
 class EarthDataTokenRetriever:
 
-    def __init__(self, 
-            earthdata_username: str, 
-            earthdata_password: str
-    ):
-        self._username = earthdata_username
-        self._password = earthdata_password
-
-    def retrieve_token(self) -> str:
+    @staticmethod
+    def retrieve_token() -> str:
         """Acquire a valid Earthdata token using login credentials.
 
         The ``earthaccess`` library is assumed to support
@@ -30,7 +24,7 @@ class EarthDataTokenRetriever:
         """
         try:
             import earthaccess
-            from earthaccess.exceptions import LoginAttemptFailure
+            from earthaccess.exceptions import (LoginAttemptFailure, LoginStrategyUnavailable)
         except ImportError as exc:
             raise err.TokenConfigurationError(
                 "`earthaccess` package is required for `EarthdataTokenRetriever` to acquire a new Earthdata token."
@@ -39,7 +33,7 @@ class EarthDataTokenRetriever:
         try:
             auth: earthaccess.Auth = earthaccess.login(strategy="environment")
             
-        except LoginAttemptFailure as exc:
+        except (LoginAttemptFailure, LoginStrategyUnavailable) as exc:
             raise err.TokenConfigurationError(
                 "Token retrieval failed due to invalid login credentials. " +
                 "Check `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` in environment."
@@ -59,11 +53,11 @@ class EarthDataTokenRetriever:
             if token is None:
                 raise ValueError("Earthdata authentication server responded with empty token.")
             if not isinstance(token, str) or not token.strip():
-                raise TypeError("Provided Earthdata token is not a string.")
+                raise TypeError("Provided Earthdata token is not a string or is all whitespace.")
 
         except Exception as exc: # TODO: More specific error translation?
             raise err.TokenServiceUnavailableError(
                 "Token retrieval service failed unexpectedly with invalid token response."
             ) from exc
 
-        return token.strip()
+        return token.strip() # TODO: Should we actually strip whitespace if the server returns someone with whitespace?
