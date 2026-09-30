@@ -1,5 +1,4 @@
 from __future__ import annotations
-import logging
 from pathlib import Path
 
 # Applicaiton Imports
@@ -9,8 +8,6 @@ from nldas_ingestion.infrastructure.credentials.earthdata_token_retriever import
 from nldas_ingestion.infrastructure.credentials.protocols import TokenValidationResult
 import nldas_ingestion.infrastructure.credentials.exceptions as err
 
-
-LOGGER = logging.getLogger(__name__)
 
 class EarthDataTokenProvider:
 
