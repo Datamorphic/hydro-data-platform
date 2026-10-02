@@ -1,5 +1,5 @@
 from typing import (Mapping)
-import nldas_ingestion.infrastructure.credentials.exceptions as err
+import nldas_ingestion.infrastructure.earthdata.auth.exceptions as err
 
 class EarthDataTokenRetriever:
 

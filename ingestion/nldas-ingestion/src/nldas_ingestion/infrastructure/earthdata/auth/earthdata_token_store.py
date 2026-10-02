@@ -2,7 +2,7 @@ from pathlib import Path
 import json
 
 from nldas_ingestion.infrastructure.storage.protocols import (ObjectStore)
-import nldas_ingestion.infrastructure.credentials.exceptions as CredentialErrors
+import nldas_ingestion.infrastructure.earthdata.auth.exceptions as CredentialErrors
 import nldas_ingestion.infrastructure.storage.exceptions as StorageErrors
 
 class EarthDataTokenStore:

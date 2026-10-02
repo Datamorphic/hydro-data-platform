@@ -1,4 +1,4 @@
-from nldas_ingestion.infrastructure.credentials.protocols import TokenValidationResult
+from nldas_ingestion.infrastructure.earthdata.auth.protocols import TokenValidationResult
 
 DEFAULT_VALIDATION_URL = "https://cmr.earthdata.nasa.gov/search/collections"
 

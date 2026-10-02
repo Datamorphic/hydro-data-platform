@@ -2,9 +2,9 @@ import pytest
 from pytest_mock import MockerFixture
 from unittest.mock import Mock
 import json
-from nldas_ingestion.infrastructure.credentials.earthdata_token_store import EarthDataTokenStore
+from nldas_ingestion.infrastructure.earthdata.auth.earthdata_token_store import EarthDataTokenStore
 from nldas_ingestion.infrastructure.storage.protocols import ObjectStore
-import nldas_ingestion.infrastructure.credentials.exceptions as TokenError
+import nldas_ingestion.infrastructure.earthdata.auth.exceptions as TokenError
 import nldas_ingestion.infrastructure.storage.exceptions as StorageError
 
 """

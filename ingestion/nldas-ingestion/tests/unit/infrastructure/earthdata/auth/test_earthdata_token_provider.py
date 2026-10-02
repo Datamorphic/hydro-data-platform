@@ -2,13 +2,13 @@ import pytest
 from pytest_mock import MockerFixture
 from unittest.mock import Mock
 
-from nldas_ingestion.infrastructure.credentials.earthdata_token_provider import EarthDataTokenProvider
-import nldas_ingestion.infrastructure.credentials.exceptions as TokenError
-from nldas_ingestion.infrastructure.credentials.earthdata_token_store import EarthDataTokenStore
-from nldas_ingestion.infrastructure.credentials.earthdata_token_validator import EarthDataTokenValidator
-from nldas_ingestion.infrastructure.credentials.earthdata_token_retriever import EarthDataTokenRetriever
+from nldas_ingestion.infrastructure.earthdata.auth.earthdata_token_provider import EarthDataTokenProvider
+import nldas_ingestion.infrastructure.earthdata.auth.exceptions as TokenError
+from nldas_ingestion.infrastructure.earthdata.auth.earthdata_token_store import EarthDataTokenStore
+from nldas_ingestion.infrastructure.earthdata.auth.earthdata_token_validator import EarthDataTokenValidator
+from nldas_ingestion.infrastructure.earthdata.auth.earthdata_token_retriever import EarthDataTokenRetriever
 from nldas_ingestion.infrastructure.storage.minio_object_store import MinioObjectStore
-from nldas_ingestion.infrastructure.credentials.protocols import TokenValidationResult
+from nldas_ingestion.infrastructure.earthdata.auth.protocols import TokenValidationResult
 
 
 @pytest.fixture
