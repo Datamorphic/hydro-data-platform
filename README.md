@@ -28,6 +28,7 @@ config:
   theme: redux
 ---
 flowchart TD
+  subgraph diagram["Architecture"]
 
     %% =========================
     %% Upstream
@@ -99,6 +100,7 @@ flowchart TD
         g3["Data Lineage"]
         g4["Access Control"]
     end
+  end
 
     %% =========================
     %% Primary Data Flow
@@ -147,7 +149,9 @@ config:
   layout: elk
   theme: redux
 ---
-flowchart TB
+flowchart TD
+
+  subgraph diagram["Diagram"]
 
     %% =========================
     %% UPSTREAM
@@ -205,7 +209,6 @@ flowchart TB
 
     end
 
-
     %% =========================
     %% PROCESSING
     %% =========================
@@ -248,6 +251,7 @@ flowchart TB
         d1["Hydrologic Analytics"]
         d2["Hydrologic Modeling"]
     end
+  end
 
 
     %% =========================
