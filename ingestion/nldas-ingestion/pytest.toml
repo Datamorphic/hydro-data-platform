@@ -4,3 +4,6 @@ addopts = ["-ra", "-q"]
 testpaths = [
     "tests",
 ]
+markers = [
+    "e2e: live end-to-end tests that contact external services",
+]

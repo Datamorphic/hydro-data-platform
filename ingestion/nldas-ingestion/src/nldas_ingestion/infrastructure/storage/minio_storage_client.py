@@ -15,6 +15,7 @@ class MinioStorageClient:
         endpoint: str,
         access_key: str,
         secret_key: str,
+
     ):
         self._mio = Minio(
             endpoint=endpoint,
@@ -22,6 +23,12 @@ class MinioStorageClient:
             secret_key=secret_key,
             secure=False
         )
+
+    @classmethod
+    def from_client(cls, client: Minio):
+        instance = cls("","","")
+        instance._mio = client
+        return instance
 
     def get_object(
         self, 
