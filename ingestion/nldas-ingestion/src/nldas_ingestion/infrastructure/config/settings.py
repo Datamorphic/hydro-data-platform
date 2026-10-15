@@ -15,6 +15,7 @@ class Settings:
     earthdata_password: str
     earthdata_token_bucket: str
     earthdata_token_key: str
+    discovery_bucket: str
 
 
 def get_required_env_var(sys_var: str) -> str:
@@ -31,7 +32,8 @@ def load_settings() -> Settings:
         object_store_access_key=get_required_env_var("OBJECT_STORE_ACCESS_KEY"),
         object_store_secret_key=get_required_env_var("OBJECT_STORE_SECRET_KEY"),
         earthdata_token_bucket=get_required_env_var("EARTHDATA_TOKEN_BUCKET"),
-        earthdata_token_key=get_required_env_var("EARTHDATA_TOKEN_KEY")        
+        earthdata_token_key=get_required_env_var("EARTHDATA_TOKEN_KEY"),
+        discovery_bucket=get_required_env_var("DISCOVERY_BUCKET"),
     )
 
 def load_dotenv_config():

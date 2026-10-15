@@ -17,16 +17,21 @@ def build_object_store(settings: progset.Settings) -> MinioObjectStore:
     ########################
     # Dependency Composition
     ########################
+
+    discovery_bucket: str = settings.discovery_bucket
+
     minio_client = MinioStorageClient(
             endpoint= settings.object_store_endpoint,
             access_key=settings.object_store_access_key,
             secret_key=settings.object_store_secret_key
         )
 
+    if not minio_client._mio.bucket_exists(discovery_bucket):
+        minio_client._mio.make_bucket(discovery_bucket)
+
     minio_store = MinioObjectStore(
         client=minio_client,
-        bucket_name="raw" # TODO: Add to settings
-        # bucket_name=settings.earthdata_token_bucket
+        bucket_name=discovery_bucket
     )
 
     return minio_store
@@ -61,8 +66,8 @@ def discover_nldas_granules():
     object_store = build_object_store(settings=settings)
     granule_extractor = build_granule_extractor()
 
-    start_dtime = datetime.strptime(progargs['startdtime'],DTFORMAT)
-    end_dtime = datetime.strptime(progargs['enddtime'],DTFORMAT)
+    start_dtime = datetime.strptime(progargs['startdtime'],DTFORMAT) # NOTE: Make sure seconds don't have decimals (whole seconds only)
+    end_dtime = datetime.strptime(progargs['enddtime'],DTFORMAT)     # NOTE: Make sure seconds don't have decimals (whole seconds only)
 
     cmr_request = discover.create_discovery_request_for_cmr(
         startdtime=start_dtime,
