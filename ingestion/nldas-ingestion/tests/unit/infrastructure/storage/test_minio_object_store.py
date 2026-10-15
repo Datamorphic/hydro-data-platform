@@ -154,12 +154,13 @@ class TestMinioObjectStore:
             stream = Mock()
             length = 128
             content_type = "application/octet-stream"
+            metadata = None
 
             result = minio_object_store.put_stream(
                 key,
                 stream,
                 length,
-                content_type,
+                content_type,                
             )
 
             assert result is None
@@ -169,6 +170,7 @@ class TestMinioObjectStore:
                 data=stream,
                 length=length,
                 content_type=content_type,
+                metadata=metadata
             )
 
         def test_storage_client_errors_propagate(self: object,

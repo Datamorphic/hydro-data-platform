@@ -174,6 +174,7 @@ class TestMinioStorageClient:
             bucket_name = "bucket_name"
             object_name = "object_name"
             content_type = "application/octet-stream"
+            metadata = None
             data = Mock()
             length = 7
             etag = "etag-value"
@@ -203,6 +204,7 @@ class TestMinioStorageClient:
                 data=data,
                 length=length,
                 content_type=content_type,
+                metadata=None
             )
 
         def test_minio_client_s3_errors_translate_to_storage_errors(self,
@@ -233,6 +235,7 @@ class TestMinioStorageClient:
                 data=data,
                 length=7,
                 content_type="application/octet-stream",
+                metadata=None
             )
 
         def test_minio_client_non_s3_errors_raise_storage_service_error(self,
@@ -261,6 +264,7 @@ class TestMinioStorageClient:
                 data=data,
                 length=7,
                 content_type="application/octet-stream",
+                metadata=None
             )
 
 

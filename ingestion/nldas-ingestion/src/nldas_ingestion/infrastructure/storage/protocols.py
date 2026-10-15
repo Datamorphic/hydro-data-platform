@@ -1,6 +1,8 @@
-from typing import Protocol, BinaryIO
+from typing import (Protocol, BinaryIO, Dict, Union, List, Tuple, Optional)
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+
+MetaDict = Dict[str, Union[str, List[str], Tuple[str]]]
 
 
 class ObjectPutResponse(Protocol):
@@ -33,7 +35,8 @@ class StorageClient(Protocol):
         object_name: str,
         data: BinaryIO,
         length: int,
-        content_type: str
+        content_type: str,
+        metadata: Optional[MetaDict] = None
         
     ) -> ObjectPutResponse:
         ...

@@ -1,8 +1,8 @@
 from io import BytesIO
-from typing import BinaryIO
+from typing import (BinaryIO, Optional)
 from contextlib import AbstractContextManager
 
-from nldas_ingestion.infrastructure.storage.protocols import StorageClient
+from nldas_ingestion.infrastructure.storage.protocols import (StorageClient, MetaDict)
 
 class MinioObjectStore:
     """
@@ -44,7 +44,8 @@ class MinioObjectStore:
     def put(self, 
             key: str, 
             data: bytes, 
-            content_type: str
+            content_type: str,
+            metadata: Optional[MetaDict] = None
         ) -> None:
         """Writes `data [bytes]` to object storage in object store bucket as `key`.
         
@@ -56,14 +57,16 @@ class MinioObjectStore:
             object_name=key,
             data=BytesIO(data),
             length=len(data),
-            content_type=content_type
+            content_type=content_type,
+            metadata=metadata
         )
 
     def put_stream(self, 
             key: str, 
             data: BinaryIO, 
             length: int,
-            content_type: str
+            content_type: str,
+            metadata: Optional[MetaDict] = None
         ) -> None:
         """Writes `data stream [BinaryIO]` to object storage in object store bucket as `key`."""
         self._client.put_object(
@@ -71,7 +74,8 @@ class MinioObjectStore:
             object_name=key,
             data=data,
             length=length,
-            content_type=content_type
+            content_type=content_type,
+            metadata=metadata
         )
 
     def delete(self, key: str) -> None:

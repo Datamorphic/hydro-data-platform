@@ -1,11 +1,11 @@
 from dataclasses import dataclass
-from typing import (BinaryIO, cast, Dict, List, Tuple, NoReturn)
+from typing import (BinaryIO, cast, Dict, List, Tuple, NoReturn, Optional)
 from contextlib import AbstractContextManager
 from minio import Minio
 from minio.error import S3Error
 from minio.helpers import ObjectWriteResult
 # import io # io.BytesIO(bytes) -> BytesIO class which passes BinaryIO protocol class
-from nldas_ingestion.infrastructure.storage.protocols import ObjectPutResponse
+from nldas_ingestion.infrastructure.storage.protocols import ObjectPutResponse, MetaDict
 import nldas_ingestion.infrastructure.storage.exceptions as err
 
 class MinioStorageClient:
@@ -84,7 +84,7 @@ class MinioStorageClient:
         data: BinaryIO,
         length: int,
         content_type: str,
-        **kwargs
+        metadata: Optional[MetaDict] = None
     ) -> ObjectPutResponse:
         """
         Uploads data to object storage and returns an object put response.
@@ -97,7 +97,8 @@ class MinioStorageClient:
                     object_name=object_name,
                     data=data,
                     length=length,
-                    content_type=content_type
+                    content_type=content_type,
+                    metadata=metadata
             ))
         except S3Error as exc:
             raise_translated_minio_s3_error(
