@@ -75,7 +75,7 @@ class ObjectStore(Protocol):
         """
         ...
 
-    def put(self, key: str, data: bytes, content_type: str) -> None: # what is the return type (probably none or a task or resource identifier).
+    def put(self, key: str, data: bytes, content_type: str, metadata: Optional[MetaDict] = None) -> None: # what is the return type (probably none or a task or resource identifier).
         """Operation for writting small objects.
 
         Exceptions:            
@@ -87,7 +87,7 @@ class ObjectStore(Protocol):
         """
         ...
 
-    def put_stream(self, key: str, data: BinaryIO, length: int, content_type: str) -> None:
+    def put_stream(self, key: str, data: BinaryIO, length: int, content_type: str, metadata: Optional[MetaDict] = None) -> None:
         """Operation for writting large or already-streamed objects.
 
         Exceptions:            

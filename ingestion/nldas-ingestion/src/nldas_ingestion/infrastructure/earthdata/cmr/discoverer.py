@@ -47,6 +47,7 @@ from functools import wraps
 from datetime import datetime, timezone
 from nldas_ingestion.infrastructure.storage.protocols import ObjectStore
 import nldas_ingestion.domain.artifacts as dom
+from nldas_ingestion.infrastructure.storage.protocols import MetaDict
 
 DTFORMAT = "%Y-%m-%dT%H:%M:%SZ" # NASA uses UTC time zone so append with "Z"
 BASEURL = "https://cmr.earthdata.nasa.gov/search/granules"
@@ -404,8 +405,14 @@ def write_discovery_report_to_object_store(
         indent=10
     ).encode("UTF-8")
 
+    metadata: MetaDict = {
+        "creation_datetime": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+        "artifact_type": "discovery"
+    }
+
     object_store.put(
         key=key,
         data=payload,
-        content_type='application/json'
+        content_type='application/json',
+        metadata=metadata
     )
