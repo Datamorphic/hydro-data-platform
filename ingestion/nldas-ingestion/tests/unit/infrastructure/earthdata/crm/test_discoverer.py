@@ -823,7 +823,7 @@ class TestWriteDiscoveryReportToObjectStore:
         object_store.put.assert_called_once()
         call = object_store.put.call_args.kwargs
         assert call["key"].startswith(
-            "nldas/nldas-discovery-report_"
+            "nldas/discovery-reports/discovery_"
         )
         assert call["key"].endswith(".json")
         assert json.loads(call["data"]) == report.to_dict.return_value

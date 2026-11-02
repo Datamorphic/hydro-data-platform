@@ -16,6 +16,8 @@ class Settings:
     earthdata_token_bucket: str
     earthdata_token_key: str
     discovery_bucket: str
+    planning_bucket: str
+    raw_storage_bucket: str
 
 
 def get_required_env_var(sys_var: str) -> str:
@@ -34,6 +36,8 @@ def load_settings() -> Settings:
         earthdata_token_bucket=get_required_env_var("EARTHDATA_TOKEN_BUCKET"),
         earthdata_token_key=get_required_env_var("EARTHDATA_TOKEN_KEY"),
         discovery_bucket=get_required_env_var("DISCOVERY_BUCKET"),
+        planning_bucket=get_required_env_var("PLANNING_BUCKET"),
+        raw_storage_bucket=get_required_env_var("RAW_STORAGE_BUCKET"),
     )
 
 def load_dotenv_config():

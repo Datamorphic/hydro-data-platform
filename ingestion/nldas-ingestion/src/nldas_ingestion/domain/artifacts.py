@@ -1,8 +1,14 @@
-from typing import (List, TypedDict)
+from typing import (List, Dict, TypedDict)
 from dataclasses import dataclass
 from datetime import datetime
+from typing import (Optional)
 
 DTFORMAT = '%Y-%m-%dT%H:%M:%SZ'
+
+class ObjectStoreObjectMeta(TypedDict):
+    bucket_name: str
+    object_name: str
+    metadata: Dict[str,str]
 
 class DiscoveryGranuleUmm(TypedDict):
     meta: dict
@@ -13,12 +19,17 @@ class DiscoveryResponseUmm(TypedDict):
     took: int
     items: List[DiscoveryGranuleUmm]
 
+class DiscoveryReportDict(TypedDict):
+    meta: dict
+    granules: List[dict]
+
 @dataclass
 class SpatialExtent:
     north: float
     east: float
     south: float
     west: float
+    name: Optional[str] = None
 
 @dataclass
 class GranuleAccess:
@@ -54,15 +65,23 @@ class DiscoveryReport:
 
 
 @dataclass
-class DownloadJob:
+class GranuleDownloadJob:
+    base_url: str
+    subset: bool
     granule_id: str
-    operation: str
-    access_method: str
+    granule_name: str
+    date_time: datetime
+    version: str
+    last_updated_at: datetime
     subset_extent: SpatialExtent | None
 
 @dataclass
-class JobPlan:
-    jobs: List[DownloadJob]
+class GranuleDownloadJobPlan:
+    spatial_extent: SpatialExtent
+    jobs: List[GranuleDownloadJob]
+
+    def to_dict(self):
+        return to_dict(self)
 
 
 def to_dict(obj):

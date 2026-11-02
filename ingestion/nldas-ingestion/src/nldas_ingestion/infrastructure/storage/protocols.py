@@ -1,6 +1,7 @@
 from typing import (Protocol, BinaryIO, Dict, Union, List, Tuple, Optional)
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+import nldas_ingestion.domain.artifacts as dom
 
 MetaDict = Dict[str, Union[str, List[str], Tuple[str]]]
 
@@ -46,6 +47,13 @@ class StorageClient(Protocol):
         bucket_name: str,
         object_name: str
     ) -> None:
+        ...
+
+    def search_objects(
+        self,
+        bucket_name: str,
+        prefix: Optional[str] = None
+    ) -> List[dom.ObjectStoreObjectMeta]:
         ...
 
 
@@ -110,4 +118,14 @@ class ObjectStore(Protocol):
             `StorageServiceError`: when the storage service returned an unclassified error.
         """
         ...
+
+    def search(self, prefix: Optional[str] = None) -> List[dom.ObjectStoreObjectMeta]:
+        """
+        Operation for searching the object store for existing objects
+
+        Searches the object store for exsting objets that have a matching prefix to the
+            provided prefix and returns the results as a list of `dom.ObjectStoreObjectMeta`.
+        """
+        ...
+
 

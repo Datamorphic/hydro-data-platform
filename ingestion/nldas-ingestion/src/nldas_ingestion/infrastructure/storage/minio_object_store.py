@@ -1,7 +1,8 @@
 from io import BytesIO
-from typing import (BinaryIO, Optional)
+from typing import (List, BinaryIO, Optional)
 from contextlib import AbstractContextManager
 
+import nldas_ingestion.domain.artifacts as dom
 from nldas_ingestion.infrastructure.storage.protocols import (StorageClient, MetaDict)
 
 class MinioObjectStore:
@@ -83,6 +84,13 @@ class MinioObjectStore:
         self._client.remove_object(
             self._bucket_name,
             key
+        )
+
+    def search(self, prefix: Optional[str] = None) -> List[dom.ObjectStoreObjectMeta]:
+        """Searches object store for items with `prefix` and returns results as a dictionary."""
+        return self._client.search_objects(
+            self._bucket_name,
+            prefix=prefix
         )
 
 if __name__ == "__main__":

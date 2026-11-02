@@ -398,7 +398,8 @@ def write_discovery_report_to_object_store(
     Dependencies:
     - Object Store (Minio Client)
     """
-    key=f"nldas/nldas-discovery-report_{datetime.now(tz=timezone.utc).strftime(DTFORMAT)}.json".replace(":","p")
+    _datetime = datetime.now(tz=timezone.utc).strftime(DTFORMAT).replace(":","p")
+    key=f"nldas/discovery-reports/discovery_{_datetime}.json"
     discovery_report_dict = discovery_report.to_dict()
     payload = json.dumps(
         discovery_report_dict, 

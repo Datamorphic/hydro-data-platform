@@ -1,11 +1,13 @@
 from dataclasses import dataclass
-from typing import (BinaryIO, cast, Dict, List, Tuple, NoReturn, Optional)
+from typing import (BinaryIO, cast, Dict, List, Tuple, NoReturn, Optional, Iterator)
 from contextlib import AbstractContextManager
 from minio import Minio
 from minio.error import S3Error
+from minio.datatypes import Object
 from minio.helpers import ObjectWriteResult
 # import io # io.BytesIO(bytes) -> BytesIO class which passes BinaryIO protocol class
 from nldas_ingestion.infrastructure.storage.protocols import ObjectPutResponse, MetaDict
+import nldas_ingestion.domain.artifacts as dom
 import nldas_ingestion.infrastructure.storage.exceptions as err
 
 class MinioStorageClient:
@@ -139,6 +141,65 @@ class MinioStorageClient:
             raise err.StorageServiceError(
                 f"Minio storage client failed unexpectedly while deleting object {bucket_name}/{object_name}."
             )
+
+    def search_objects(
+        self,
+        bucket_name: str,
+        prefix: Optional[str] = None
+    ) -> List[dom.ObjectStoreObjectMeta]:
+        """
+        Searches the specified object store bucket for objects with a the provided prefix. If
+            no prefix is set, returns all objects
+        """
+
+        items: Iterator[Object] = self._mio.list_objects(
+            bucket_name=bucket_name,
+            prefix=prefix,
+            recursive=True,
+            include_user_meta=True
+        )
+
+        results: List[dom.ObjectStoreObjectMeta] = []
+        
+        for item in items:
+            item_meta = get_minio_object_metadata(obj=item)
+            try:
+                item_bucket = str(item.bucket_name)
+            except Exception as exc:
+                raise ValueError(f'Object {item} missing bucket name') from exc
+            try:
+                item_name = str(item.object_name)
+            except Exception as exc:
+                raise ValueError(f'Object {item} missing object name') from exc 
+                
+            results.append(
+                {
+                    'bucket_name': item_bucket,
+                    'object_name': item_name,
+                    'metadata': item_meta
+                }
+            )
+
+        return results
+
+
+def get_minio_object_metadata(obj: Object) -> Dict[str,str]:
+    """
+    1.Extract Minio object metadata from an object stored as `Object` in the DOM
+        and stores as a dictionary.
+    2. Removes S3 prefix `X-Amz-Meta`.
+    3. Converts metadata key string to lowercase.
+
+    If the object has no metadata, None is returned
+
+    Returns [Dict[str,str]]: Dictionary of metadata key-value pairs
+    """
+    if not obj.metadata:
+        return {}
+    meta: Dict[str,str] = {}
+    for key, val in obj.metadata.items():
+        meta[key.casefold().replace("x-amz-meta-","")] = val
+    return meta
 
 
 def raise_translated_minio_s3_error(
