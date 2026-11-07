@@ -187,13 +187,42 @@ def plan_nldas_download_jobs():
         for id in new_granules_table['discovery_id']
     ]
 
+    # TODO: Loop through each granule and write Individual jobs under nldas/run_<run_id>/jobs/job_<job_id>.json
+    download_jobs = []
+    for idx, g in enumerate(new_granules):
+        
+        download_jobs.append(
+            plan.create_download_job(
+                granule=g,
+                spatial_subset=spatial_subset
+            )
+        )
+
+        object_prefix = (
+            f"nldas/{spatial_subset_name}/"
+            + f"run_{settings.run_id}/"
+            + f"jobs/"
+        )
+
+        plan.write_download_job_to_object_store(
+            job=download_jobs[idx],
+            object_store=planning_store,
+            object_prefix=object_prefix
+        )
+
     download_job_plan = plan.create_download_job_plan(
-        granules=new_granules,
+        download_jobs=download_jobs,
         spatial_extent=spatial_subset
     )
 
+    object_prefix = (
+        f"nldas/{spatial_subset_name}/"
+        + f"run_{settings.run_id}/"
+    )
+    
     plan.write_download_job_plan_to_object_store(
         job_plan=download_job_plan,
-        object_store=planning_store
+        object_store=planning_store,
+        object_prefix=object_prefix
     )
     

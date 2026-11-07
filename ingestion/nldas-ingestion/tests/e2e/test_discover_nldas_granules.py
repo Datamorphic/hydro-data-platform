@@ -46,6 +46,8 @@ def object_store(
     if os.getenv("RUN_E2E_TESTS") != "1":
         pytest.skip("Set `RUN_E2E_TESTS=1` in the environment to run live E2E tests.")
 
+    monkeypatch.setenv("PIPELINE_RUN_ID", "abc123")
+    
     settings = progset.load_settings()
     endpoint = progset.get_required_env_var("MINIO_TEST_ENDPOINT")
     access_key = progset.get_required_env_var("MINIO_TEST_ACCESS_KEY")

@@ -391,23 +391,26 @@ def create_discovery_report(
 
 def write_discovery_report_to_object_store(
         discovery_report: dom.DiscoveryReport, 
-        object_store: ObjectStore):
+        object_store: ObjectStore,
+        object_prefix: str):
     """
     Writes the discovery report as a JSON object in the object store.
 
     Dependencies:
     - Object Store (Minio Client)
     """
-    _datetime = datetime.now(tz=timezone.utc).strftime(DTFORMAT).replace(":","p")
-    key=f"nldas/discovery-reports/discovery_{_datetime}.json"
+    # _datetime = datetime.now(tz=timezone.utc).strftime(DTFORMAT).replace(":","p")
+    object_name = f'discovery_report.json'
+    key=f"{object_prefix}{object_name}"
     discovery_report_dict = discovery_report.to_dict()
     payload = json.dumps(
         discovery_report_dict, 
         indent=10
     ).encode("UTF-8")
 
+    _datetime = datetime.now(tz=timezone.utc).strftime(DTFORMAT)
     metadata: MetaDict = {
-        "creation_datetime": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+        "creation_datetime": _datetime,
         "artifact_type": "discovery"
     }
 

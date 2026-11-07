@@ -80,9 +80,12 @@ def discover_nldas_granules():
         extractor=granule_extractor
     )
 
+    object_prefix = f"nldas/run_{settings.run_id}/"
+    
     discover.write_discovery_report_to_object_store(
         discovery_report=discovery_report,
-        object_store=object_store
+        object_store=object_store,
+        object_prefix=object_prefix
     )
 
 

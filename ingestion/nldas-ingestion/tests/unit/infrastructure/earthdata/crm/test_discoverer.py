@@ -816,14 +816,15 @@ class TestWriteDiscoveryReportToObjectStore:
             "granules": [],
         }
         object_store = mocker.Mock()
+        object_prefix = 'nldas/run_abc123/'
 
-        discover.write_discovery_report_to_object_store(report, object_store)
+        discover.write_discovery_report_to_object_store(report, object_store, object_prefix)
 
         report.to_dict.assert_called_once()
         object_store.put.assert_called_once()
         call = object_store.put.call_args.kwargs
         assert call["key"].startswith(
-            "nldas/discovery-reports/discovery_"
+            f"{object_prefix}discovery_report"
         )
         assert call["key"].endswith(".json")
         assert json.loads(call["data"]) == report.to_dict.return_value
@@ -843,10 +844,16 @@ class TestWriteDiscoveryReportToObjectStore:
         object_store = mocker.Mock()
         object_store.put.side_effect = storage_error
 
+        object_prefix = "nldas/run_abc123/"
+
         with pytest.raises(OSError) as exc:
-            discover.write_discovery_report_to_object_store(report, object_store)
+            discover.write_discovery_report_to_object_store(report, object_store, object_prefix)
 
         object_store.put.assert_called_once()
         call = object_store.put.call_args.kwargs
+        assert call["key"].startswith(
+            f"{object_prefix}discovery_report"
+        )
+        assert call["key"].endswith(".json")
         assert json.loads(call["data"]) == report.to_dict.return_value
         assert call["content_type"] == "application/json"

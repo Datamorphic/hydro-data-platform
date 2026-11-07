@@ -66,6 +66,7 @@ class DiscoveryReport:
 
 @dataclass
 class GranuleDownloadJob:
+    job_id: str
     base_url: str
     subset: bool
     granule_id: str
@@ -74,6 +75,9 @@ class GranuleDownloadJob:
     version: str
     last_updated_at: datetime
     subset_extent: SpatialExtent | None
+
+    def to_dict(self):
+        return to_dict(self)
 
 @dataclass
 class GranuleDownloadJobPlan:

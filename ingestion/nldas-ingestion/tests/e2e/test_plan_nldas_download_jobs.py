@@ -26,6 +26,7 @@ class E2EMinioTarget(TypedDict):
     planning_bucket_name: str
     raw_object_store: MinioObjectStore
     raw_bucket_name: str
+    run_id: str
 
 
 def destroy_bucket(minio_client: Minio, bucket_name: str) -> None:
@@ -79,6 +80,7 @@ def e2e_minio_target(
             "Set RUN_E2E_TESTS=1 in the environment or HDP_CONFIG to run E2E tests."
         )
 
+    pipeline_run_id = "abc123"
     endpoint = os.getenv("MINIO_TEST_ENDPOINT") or config.get("MINIO_TEST_ENDPOINT")
     access_key = os.getenv("MINIO_TEST_ACCESS_KEY") or config.get("MINIO_TEST_ACCESS_KEY")
     secret_key = os.getenv("MINIO_TEST_SECRET_KEY") or config.get("MINIO_TEST_SECRET_KEY")
@@ -92,7 +94,7 @@ def e2e_minio_target(
     planning_bucket_name = f"nldas-plan-e2e-{uuid4().hex}"
     raw_bucket_name = f"nldas-raw-e2e-{uuid4().hex}"
 
-    discovery_report_key = "nldas/discovery/e2e-discovery-report.json"
+    discovery_report_key = f"nldas/run_{pipeline_run_id}/discovery_report.json"
     
     monkeypatch.setenv("HDP_CONFIG", str(config_path))
     monkeypatch.setenv("OBJECT_STORE_ENDPOINT", endpoint)
@@ -101,9 +103,11 @@ def e2e_minio_target(
     monkeypatch.setenv("DISCOVERY_BUCKET", discovery_bucket_name)
     monkeypatch.setenv("PLANNING_BUCKET", planning_bucket_name)
     monkeypatch.setenv("RAW_STORAGE_BUCKET", raw_bucket_name)
-    
+    monkeypatch.setenv("PIPELINE_RUN_ID", pipeline_run_id)
+
     load_dotenv(dotenv_path=config_path, override=False)
 
+    # TODO: Impose shorter timeout for when server is unavailable
     minio_client = Minio(
         endpoint=endpoint,
         access_key=access_key,
@@ -141,7 +145,8 @@ def e2e_minio_target(
             "planning_object_store": planning_object_store,
             "planning_bucket_name": planning_bucket_name,
             "raw_object_store": raw_object_store,
-            "raw_bucket_name": raw_bucket_name
+            "raw_bucket_name": raw_bucket_name,
+            "run_id": pipeline_run_id
         }
     finally:
         destroy_bucket(minio_client, discovery_bucket_name)
@@ -170,6 +175,7 @@ def test_plan_nldas_download_jobs_writes_partitioned_plan(
     
     raw_object_store = e2e_minio_target["raw_object_store"]
     raw_bucket_name = e2e_minio_target["raw_bucket_name"]
+    run_id = e2e_minio_target["run_id"]
     
     discovery_report = {
         "meta": {
@@ -291,12 +297,13 @@ def test_plan_nldas_download_jobs_writes_partitioned_plan(
 
     process.plan_nldas_download_jobs()
 
-    written_plans = planning_object_store.search(prefix="nldas/ca/")
+    written_plans = planning_object_store.search(prefix=f"nldas/ca/run_{run_id}/job_plan")
     assert len(written_plans) == 1
     plan_object = written_plans[0]
     assert plan_object["bucket_name"] == planning_bucket_name
-    assert plan_object["object_name"].startswith("nldas/ca/nldas-job-plan_")
-    assert plan_object["object_name"].endswith(".json")
+    # assert plan_object["object_name"].startswith("nldas/ca/nldas-job-plan_")
+    # assert plan_object["object_name"].endswith(".json")
+    assert plan_object["object_name"] == f"nldas/ca/run_{run_id}/job_plan.json"
     assert plan_object["metadata"]["artifact_type"] == "job-plan"
 
     plan_payload = planning_object_store.get(key=plan_object["object_name"])

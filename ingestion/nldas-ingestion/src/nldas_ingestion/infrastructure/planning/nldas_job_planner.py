@@ -262,6 +262,7 @@ def create_download_job(
             )
     
     return dom.GranuleDownloadJob(
+        job_id=granule.granule_id,
         base_url=base_url,
         subset=is_subset,
         granule_id=granule.granule_id,
@@ -272,21 +273,14 @@ def create_download_job(
         subset_extent=spatial_subset
     )
 
+ 
 def create_download_job_plan(
-    granules: List[dom.Granule],
+    download_jobs: List[dom.GranuleDownloadJob],
     spatial_extent: Optional[dom.SpatialExtent] = None
 ) -> dom.GranuleDownloadJobPlan:
     """
     Generates a granule job plan from a list of granule download jobs
     """
-    job_list: List[dom.GranuleDownloadJob] = []
-    for g in granules:
-        job_list.append(
-            create_download_job(
-                granule=g,
-                spatial_subset=spatial_extent
-            )
-        )
 
     if not spatial_extent:
         spatial_extent = dom.SpatialExtent(
@@ -299,26 +293,50 @@ def create_download_job_plan(
 
     return dom.GranuleDownloadJobPlan(
         spatial_extent=spatial_extent,
-        jobs=job_list
+        jobs=download_jobs
     )
+
+def write_download_job_to_object_store(
+    job: dom.GranuleDownloadJob,
+    object_store: sproto.ObjectStore,
+    object_prefix: str
+):
+    """
+    Writes a granule download job to object storage.
+    """
+    key=f"{object_prefix}job_{job.job_id}.json"
     
+    job_dict = job.to_dict()
+    payload = json.dumps(
+        job_dict,
+        indent=10
+    ).encode("UTF-8")
+
+    _datetime = datetime.now(tz=timezone.utc).strftime(DTFORMAT)
+    metadata: sproto.MetaDict = {
+            "creation_datetime": _datetime,
+            "artifact_type": "job"
+        }
+    
+    object_store.put(
+            key=key,
+            data=payload,
+            content_type='application/json',
+            metadata=metadata
+        )
+
 
 def write_download_job_plan_to_object_store(
     job_plan: dom.GranuleDownloadJobPlan,
-    object_store: sproto.ObjectStore
+    object_store: sproto.ObjectStore,
+    object_prefix: str
 ):
     """
     Writes a granule download job plan to object storage.
     """
-
-    _spatial_name = job_plan.spatial_extent.name
-    if _spatial_name is None:
-        raise ValueError(
-            "Job plan is missing spatial extent name attribute"
-        )
     
-    _datetime = datetime.now(tz=timezone.utc).strftime(DTFORMAT).replace(":","p")
-    key=f"nldas/{_spatial_name}/nldas-job-plan_{_datetime}.json"
+    # _datetime = datetime.now(tz=timezone.utc).strftime(DTFORMAT).replace(":","p")
+    key=f"{object_prefix}job_plan.json"
     
     job_plan_dict = job_plan.to_dict()
     payload = json.dumps(
@@ -326,9 +344,9 @@ def write_download_job_plan_to_object_store(
         indent=10
     ).encode("UTF-8")
 
-    
+    _datetime = datetime.now(tz=timezone.utc).strftime(DTFORMAT)
     metadata: sproto.MetaDict = {
-        "creation_datetime": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+        "creation_datetime": _datetime,
         "artifact_type": "job-plan"
     }
 

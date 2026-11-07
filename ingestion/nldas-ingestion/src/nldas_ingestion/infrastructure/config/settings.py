@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Settings:
+    run_id: str
     object_store_endpoint: str
     object_store_access_key: str
     object_store_secret_key: str
@@ -28,6 +29,7 @@ def get_required_env_var(sys_var: str) -> str:
 
 def load_settings() -> Settings:
     return Settings(
+        run_id=get_required_env_var("PIPELINE_RUN_ID"),
         earthdata_username=get_required_env_var("EARTHDATA_USERNAME"),
         earthdata_password=get_required_env_var("EARTHDATA_PASSWORD"),
         object_store_endpoint=get_required_env_var("OBJECT_STORE_ENDPOINT"),

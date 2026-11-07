@@ -17,6 +17,7 @@ from nldas_ingestion.infrastructure.storage.minio_object_store import MinioObjec
 @pytest.fixture
 def settings() -> progset.Settings:
     return progset.Settings(
+        run_id="abc123",
         object_store_endpoint="localhost:9000",
         object_store_access_key="test-access",
         object_store_secret_key="test-secret",
@@ -243,8 +244,19 @@ class TestGetSpatialSubsetFromName:
 
 class TestPlanNldasDownloadJobs:
     @pytest.fixture
-    def workflow(self, mocker: MockerFixture, sample_granules: list[dom.Granule]):
+    def workflow(self, 
+        mocker: MockerFixture, 
+        sample_granules: list[dom.Granule]
+    ):
+        run_id = "abc123"
+        spatial_extent = dom.SpatialExtent(
+            name='ca',
+            north=42.002, west=-124.410, 
+            south=32.534, east=-114.131
+        )
+        
         settings = mocker.Mock(spec=progset.Settings)
+        settings.run_id = run_id
         discovery_object_store = mocker.Mock(spec=sproto.ObjectStore)
         planning_object_store = mocker.Mock(spec=sproto.ObjectStore)
         raw_object_store = mocker.Mock(spec=sproto.ObjectStore)
@@ -257,8 +269,11 @@ class TestPlanNldasDownloadJobs:
             ),
             granules=sample_granules,
         )
+
         mocker.patch.object(process.progset, "load_dotenv_config")
+        
         mocker.patch.object(process.progset, "load_settings", return_value=settings)
+        
         mocker.patch.object(
             process,
             "load_input_arguments",
@@ -269,6 +284,7 @@ class TestPlanNldasDownloadJobs:
                 "discovery_report_key": "reports/discovery.json",
             },
         )
+        
         mocker.patch.object(process, "build_object_stores", 
             return_value=(
                 discovery_object_store,
@@ -276,37 +292,64 @@ class TestPlanNldasDownloadJobs:
                 raw_object_store
             )
         )
+
+        mocker.patch.object(
+            process,
+            "get_spatial_subset_from_name",
+            return_value=spatial_extent
+        )
         
         mocker.patch.object(
             process.plan,
             "load_discovery_report_from_object_store",
             return_value=report,
         )
+        
         discovered_table = mocker.sentinel.discovered_table
         stored_table = mocker.sentinel.stored_table
+        
         mocker.patch.object(
             process.plan,
             "create_granules_table_from_discovery_report",
             return_value=discovered_table,
         )
+
         mocker.patch.object(
             process.plan,
             "get_granules_table_from_object_store",
             return_value=stored_table,
         )
+
         new_table = mocker.Mock()
         new_table.__getitem__ = mocker.Mock(return_value=[2, 0])
+        
         mocker.patch.object(
             process.plan,
             "identify_new_granules",
             return_value=new_table,
         )
+
+        job = mocker.sentinel.job
+
+        create_job = mocker.patch.object(
+            process.plan,
+            "create_download_job",
+            return_value=job,
+        )
+        
         job_plan = mocker.sentinel.job_plan
+
+        write_job = mocker.patch.object(
+            process.plan,
+            "write_download_job_to_object_store",
+        )
+
         create_plan = mocker.patch.object(
             process.plan,
             "create_download_job_plan",
             return_value=job_plan,
         )
+        
         write_plan = mocker.patch.object(
             process.plan,
             "write_download_job_plan_to_object_store",
@@ -321,6 +364,11 @@ class TestPlanNldasDownloadJobs:
             "discovered_table": discovered_table,
             "stored_table": stored_table,
             "new_table": new_table,
+            "create_job": create_job,
+            "spatial_extent": spatial_extent,
+            "run_id": run_id,
+            "job": job,
+            "write_job": write_job,
             "create_plan": create_plan,
             "job_plan": job_plan,
             "write_plan": write_plan,
@@ -359,19 +407,45 @@ class TestPlanNldasDownloadJobs:
             discovered=workflow["discovered_table"],
             stored=workflow["stored_table"],
         )
-        workflow["create_plan"].assert_called_once_with(
-            granules=[sample_granules[2], sample_granules[0]],
-            spatial_extent=dom.SpatialExtent(
-                name="ca",
-                north=42.002,
-                west=-124.410,
-                south=32.534,
-                east=-114.131,
-            ),
+
+        workflow["create_job"].assert_has_calls(
+            [
+                call(granule=sample_granules[2], spatial_subset=workflow['spatial_extent']),
+                call(granule=sample_granules[0], spatial_subset=workflow['spatial_extent']),
+            ]
         )
+
+        object_prefix = (
+            f"nldas/{workflow['spatial_extent'].name}/"
+            + f"run_{workflow['run_id']}/"
+            + f"jobs/"
+        )
+
+        workflow["write_job"].assert_has_calls(
+            [
+                call(
+                    job=workflow["job"],
+                    object_store=workflow["planning_object_store"],
+                    object_prefix=object_prefix
+                )
+            ] * 2
+
+        )
+
+        workflow["create_plan"].assert_called_once_with(
+            download_jobs=[workflow['job'],workflow['job']],
+            spatial_extent=workflow['spatial_extent']
+        )
+
+        object_prefix = (
+            f"nldas/{workflow["spatial_extent"].name}/"
+            + f"run_{workflow["run_id"]}/"
+        )
+
         workflow["write_plan"].assert_called_once_with(
             job_plan=workflow["job_plan"],
             object_store=workflow["planning_object_store"],
+            object_prefix=object_prefix
         )
 
     def test_no_qualifying_granules_writes_an_empty_plan(
@@ -384,22 +458,34 @@ class TestPlanNldasDownloadJobs:
         A: Create a plan with an empty granule list and still write that plan.
         """
         workflow["new_table"].__getitem__.return_value = []
+        
+        empty_job_plan = dom.GranuleDownloadJobPlan(
+            spatial_extent=workflow['spatial_extent'],
+            jobs=[]
+        )
+
+        workflow["create_plan"].return_value = empty_job_plan
 
         process.plan_nldas_download_jobs()
 
+        workflow['create_job'].assert_not_called()
+
+        workflow['write_job'].assert_not_called()
+        
         workflow["create_plan"].assert_called_once_with(
-            granules=[],
-            spatial_extent=dom.SpatialExtent(
-                name="ca",
-                north=42.002,
-                west=-124.410,
-                south=32.534,
-                east=-114.131,
-            ),
+            download_jobs=[],
+            spatial_extent=workflow['spatial_extent'],
         )
+
+        object_prefix = (
+            f"nldas/{workflow['spatial_extent'].name}/"
+            + f"run_{workflow['run_id']}/"
+        )
+
         workflow["write_plan"].assert_called_once_with(
-            job_plan=workflow["job_plan"],
+            job_plan=empty_job_plan,
             object_store=workflow["planning_object_store"],
+            object_prefix=object_prefix
         )
 
     def test_invalid_subset_fails_before_building_store(

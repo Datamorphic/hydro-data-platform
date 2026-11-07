@@ -102,6 +102,20 @@ def granule() -> dom.Granule:
         ),
     )
 
+@pytest.fixture
+def download_job() -> dom.GranuleDownloadJob:
+    return dom.GranuleDownloadJob(
+        job_id="granule-1",
+        base_url="https://example.test/granule-1.nc",
+        subset=False,
+        granule_id="granule-1",
+        granule_name="NLDAS granule 1",
+        date_time=datetime(2026, 10, 1),
+        version="1",
+        last_updated_at=datetime(2026, 10, 2),
+        subset_extent=None,
+    )
+
 
 class TestIdentifyNewGranules:
 
@@ -643,6 +657,7 @@ class TestCreateDownloadJob:
         result = planner.create_download_job(granule=granule, spatial_subset=None)
 
         assert result == dom.GranuleDownloadJob(
+            job_id="granule-1",
             base_url="https://example.test/granule-1.nc",
             subset=False,
             granule_id="granule-1",
@@ -671,6 +686,7 @@ class TestCreateDownloadJob:
         result = planner.create_download_job(granule=granule, spatial_subset=subset)
 
         assert result == dom.GranuleDownloadJob(
+            job_id="granule-1",
             base_url="https://example.test/granule-1",
             subset=True,
             granule_id="granule-1",
@@ -706,25 +722,30 @@ class TestCreateDownloadJob:
 
 
 class TestCreateDownloadJobPlan:
-    def test_creates_job_for_each_granule(
+    def test_preserves_download_jobs_and_order(
         self,
-        granule: dom.Granule,
+        download_job: dom.GranuleDownloadJob,
     ) -> None:
         """
-        Q: What plan is returned for multiple granules without a subset?
-        A: Return one non-subset download job per granule, preserving the input order.
+        Q: How does the planner package a list of download jobs?
+        A: Return the supplied jobs unchanged and in their original order, using the default CONUS extent when none is provided.
         """
-        second_granule = replace(
-            granule,
+        second_job = replace(
+            download_job,
+            job_id="granule-2",
+            base_url="https://example.test/granule-2.nc",
+            subset=False,
             granule_id="granule-2",
             granule_name="NLDAS granule 2",
-            access=dom.GranuleAccess(
-                raw_url="https://example.test/granule-2.nc",
-                opendap_url="https://example.test/granule-2",
-            ),
+            date_time=datetime(2026, 10, 1),
+            version="1",
+            last_updated_at=datetime(2026, 10, 2),
+            subset_extent=None,
         )
 
-        result = planner.create_download_job_plan([granule, second_granule])
+        download_jobs = [download_job, second_job]
+
+        result = planner.create_download_job_plan(download_jobs)
 
         assert result == dom.GranuleDownloadJobPlan(
             spatial_extent=dom.SpatialExtent(
@@ -734,34 +755,13 @@ class TestCreateDownloadJobPlan:
                 south=25.0,
                 east=-67.0,
             ),
-            jobs=[
-                dom.GranuleDownloadJob(
-                    base_url="https://example.test/granule-1.nc",
-                    subset=False,
-                    granule_id="granule-1",
-                    granule_name="NLDAS granule 1",
-                    date_time=datetime(2026, 10, 1),
-                    version="1",
-                    last_updated_at=datetime(2026, 10, 2),
-                    subset_extent=None,
-                ),
-                dom.GranuleDownloadJob(
-                    base_url="https://example.test/granule-2.nc",
-                    subset=False,
-                    granule_id="granule-2",
-                    granule_name="NLDAS granule 2",
-                    date_time=datetime(2026, 10, 1),
-                    version="1",
-                    last_updated_at=datetime(2026, 10, 2),
-                    subset_extent=None,
-                ),
-            ]
+            jobs=download_jobs,
         )
 
-    def test_empty_granule_list_returns_empty_plan(self) -> None:
+    def test_empty_download_job_list_returns_empty_plan(self) -> None:
         """
-        Q: What plan is returned when there are no granules?
-        A: Return an empty GranuleDownloadJobPlan with the default CONUS spatial extent.
+        Q: What plan is returned when the download-job list is empty?
+        A: Return an empty plan with the default CONUS spatial extent.
         """
         assert planner.create_download_job_plan([]) == dom.GranuleDownloadJobPlan(
             spatial_extent=dom.SpatialExtent(
@@ -774,19 +774,14 @@ class TestCreateDownloadJobPlan:
             jobs=[],
         )
 
-    def test_subset_is_applied_to_each_granule(self, granule: dom.Granule) -> None:
+    def test_preserves_supplied_spatial_extent_and_jobs(
+        self,
+        download_job: dom.GranuleDownloadJob,
+    ) -> None:
         """
-        Q: Is the requested spatial subset applied consistently to each granule?
-        A: Each generated job is marked as a subset job and carries the requested extent.
+        Q: What happens when a spatial extent is supplied with ready-made download jobs?
+        A: Use that extent for the plan and preserve each supplied job exactly as provided.
         """
-        second_granule = replace(
-            granule,
-            granule_id="granule-2",
-            access=dom.GranuleAccess(
-                raw_url="https://example.test/granule-2.nc",
-                opendap_url="https://example.test/granule-2",
-            ),
-        )
         subset = dom.SpatialExtent(
             name="ca",
             north=45.0,
@@ -795,60 +790,40 @@ class TestCreateDownloadJobPlan:
             west=-125.0,
         )
 
+        subset_job = replace(
+            download_job,
+            subset=True,
+            subset_extent=subset,
+        )
+        download_jobs = [download_job, subset_job]
+
         result = planner.create_download_job_plan(
-            [granule, second_granule],
+            download_jobs=download_jobs,
             spatial_extent=subset,
         )
 
         assert result.spatial_extent == subset
-        assert len(result.jobs) == 2
-        assert all(job.subset for job in result.jobs)
-        assert all(job.subset_extent == subset for job in result.jobs)
-
-    def test_missing_opendap_url_propagates_value_error(
-        self,
-        granule: dom.Granule,
-    ) -> None:
-        """
-        Q: What happens if any granule cannot satisfy the requested subset?
-        A: Propagate ValueError rather than return a partial download plan.
-        """
-        granule_without_opendap = replace(
-            granule,
-            access=dom.GranuleAccess(
-                raw_url=granule.access.raw_url,
-                opendap_url=None,
-            ),
-        )
-        subset = dom.SpatialExtent(
-            name="ca",
-            north=45.0,
-            east=-115.0,
-            south=32.0,
-            west=-125.0,
-        )
-
-        with pytest.raises(ValueError, match="granule-1"):
-            planner.create_download_job_plan(
-                [granule, granule_without_opendap],
-                spatial_extent=subset,
-            )
+        assert result.jobs == download_jobs
+        assert result.jobs[0] == download_job
+        assert result.jobs[1] == subset_job
 
 
 class TestWriteDownloadJobPlanToObjectStore:
-    @pytest.mark.parametrize("spatial_name", ["conus", "ca", "sd"])
+    @pytest.mark.parametrize("object_prefix", ["download/job/plan/", ""])
     def test_serializes_and_uploads_job_plan(
         self,
         mocker: MockerFixture,
-        spatial_name: str,
+        object_prefix: str,
+        download_job: dom.GranuleDownloadJob,
     ) -> None:
         """
         Q: How is a populated job plan written to object storage?
-        A: Upload its JSON representation under the spatial partition, with application/json content type, job-plan metadata, and a timestamped key.
+        A: Upload its JSON representation at the supplied prefix plus `job_plan.json`,
+        with application/json content type, job-plan metadata, and a UTC timestamp.
         """
         object_store = mocker.Mock(spec=sproto.ObjectStore)
         spatial_extent = dom.SpatialExtent(
-            name=spatial_name,
+            name="conus",
             north=53.0,
             east=-67.0,
             south=25.0,
@@ -856,41 +831,24 @@ class TestWriteDownloadJobPlanToObjectStore:
         )
         job_plan = dom.GranuleDownloadJobPlan(
             spatial_extent=spatial_extent,
-            jobs=[
-                dom.GranuleDownloadJob(
-                    base_url="https://example.test/granule-1.nc",
-                    subset=False,
-                    granule_id="granule-1",
-                    granule_name="NLDAS granule 1",
-                    date_time=datetime(2026, 10, 1),
-                    version="1",
-                    last_updated_at=datetime(2026, 10, 2),
-                    subset_extent=None,
-                )
-            ]
+            jobs=[download_job]
         )
 
         planner.write_download_job_plan_to_object_store(
             job_plan=job_plan,
             object_store=object_store,
+            object_prefix=object_prefix,
         )
 
         object_store.put.assert_called_once()
         call = object_store.put.call_args.kwargs
-        assert call["key"].startswith(
-            f"nldas/{spatial_name}/nldas-job-plan_"
-        )
-        assert call["key"].endswith(".json")
-        timestamp = call["key"].removeprefix(
-            f"nldas/{spatial_name}/nldas-job-plan_"
-        ).removesuffix(".json")
-        assert datetime.strptime(timestamp, "%Y-%m-%dT%Hp%Mp%SZ")
+        assert call["key"] == f"{object_prefix}job_plan.json"
         assert call["data"] == json.dumps(job_plan.to_dict(), indent=10).encode("UTF-8")
         assert call["content_type"] == "application/json"
         assert call["metadata"]["artifact_type"] == "job-plan"
         datetime.strptime(
             call["metadata"]["creation_datetime"],
-            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%SZ",
         )
 
     def test_empty_job_plan_is_written_as_empty_jobs_list(
@@ -913,14 +871,16 @@ class TestWriteDownloadJobPlanToObjectStore:
             jobs=[],
         )
 
+        object_prefix = "download/job/plan/"
         planner.write_download_job_plan_to_object_store(
             job_plan=job_plan,
             object_store=object_store,
+            object_prefix=object_prefix
         )
 
         object_store.put.assert_called_once()
         assert json.loads(object_store.put.call_args.kwargs["data"]) == job_plan.to_dict()
-        assert object_store.put.call_args.kwargs["key"].startswith("nldas/conus/")
+        assert object_store.put.call_args.kwargs["key"] == f"{object_prefix}job_plan.json"
 
     def test_object_store_put_failure_is_propagated(self, mocker: MockerFixture) -> None:
         """
@@ -941,38 +901,110 @@ class TestWriteDownloadJobPlanToObjectStore:
             jobs=[],
         )
 
+        object_prefix = "download/job/plan/"
+
         with pytest.raises(OSError, match="storage unavailable") as exc_info:
             planner.write_download_job_plan_to_object_store(
                 job_plan=job_plan,
                 object_store=object_store,
+                object_prefix=object_prefix
             )
 
         assert exc_info.value is storage_error
         object_store.put.assert_called_once()
 
-    def test_missing_spatial_extent_name_raises_without_upload(
+
+    # def test_missing_spatial_extent_name_raises_without_upload(
+    #     self,
+    #     mocker: MockerFixture,
+    # ) -> None:
+    #     """
+    #     Q: What happens when the plan's spatial extent has no partition name?
+    #     A: Raise ValueError and do not write an object because its destination partition is unknown.
+    #     NOTE: Obsolete because object_prefix setting is handled by calling program, so this no longer throws error if none
+    #     """
+    #     object_store = mocker.Mock(spec=sproto.ObjectStore)
+    #     job_plan = dom.GranuleDownloadJobPlan(
+    #         spatial_extent=dom.SpatialExtent(
+    #             north=53.0,
+    #             east=-67.0,
+    #             south=25.0,
+    #             west=-125.0,
+    #         ),
+    #         jobs=[],
+    #     )
+
+    #     object_prefix = "download/job/plan/"
+
+    #     with pytest.raises(ValueError, match="missing spatial extent name"):
+    #         planner.write_download_job_plan_to_object_store(
+    #             job_plan=job_plan,
+    #             object_store=object_store,
+    #             object_prefix=object_prefix
+    #         )
+
+    #     object_store.put.assert_not_called()
+
+
+class TestWriteDownloadJobToObjectStore:
+    @pytest.mark.parametrize(
+        "object_prefix",
+        ["nldas/conus/run-1/jobs/", ""],
+    )
+    def test_serializes_and_uploads_download_job(
         self,
         mocker: MockerFixture,
+        download_job: dom.GranuleDownloadJob,
+        object_prefix: str,
     ) -> None:
         """
-        Q: What happens when the plan's spatial extent has no partition name?
-        A: Raise ValueError and do not write an object because its destination partition is unknown.
+        Q: How is a download job written to object storage?
+        A: Upload its JSON representation under the supplied prefix using the job ID
+        in the key, application/json content type, job metadata, and a UTC timestamp.
         """
         object_store = mocker.Mock(spec=sproto.ObjectStore)
-        job_plan = dom.GranuleDownloadJobPlan(
-            spatial_extent=dom.SpatialExtent(
-                north=53.0,
-                east=-67.0,
-                south=25.0,
-                west=-125.0,
-            ),
-            jobs=[],
+
+        result = planner.write_download_job_to_object_store(
+            job=download_job,
+            object_store=object_store,
+            object_prefix=object_prefix,
         )
 
-        with pytest.raises(ValueError, match="missing spatial extent name"):
-            planner.write_download_job_plan_to_object_store(
-                job_plan=job_plan,
+        object_store.put.assert_called_once()
+        call = object_store.put.call_args.kwargs
+        assert call["key"] == f"{object_prefix}job_{download_job.job_id}.json"
+        assert call["data"] == json.dumps(
+            download_job.to_dict(),
+            indent=10,
+        ).encode("UTF-8")
+        assert json.loads(call["data"].decode("UTF-8")) == download_job.to_dict()
+        assert call["content_type"] == "application/json"
+        assert call["metadata"]["artifact_type"] == "job"
+        datetime.strptime(
+            call["metadata"]["creation_datetime"],
+            "%Y-%m-%dT%H:%M:%SZ",
+        )
+        assert result is None
+
+    def test_object_store_put_failure_is_propagated(
+        self,
+        mocker: MockerFixture,
+        download_job: dom.GranuleDownloadJob,
+    ) -> None:
+        """
+        Q: What happens when object storage fails to save a download job?
+        A: Propagate the original exception to the caller.
+        """
+        object_store = mocker.Mock(spec=sproto.ObjectStore)
+        storage_error = OSError("storage unavailable")
+        object_store.put.side_effect = storage_error
+
+        with pytest.raises(OSError, match="storage unavailable") as exc_info:
+            planner.write_download_job_to_object_store(
+                job=download_job,
                 object_store=object_store,
+                object_prefix="nldas/conus/run-1/jobs/",
             )
 
-        object_store.put.assert_not_called()
+        assert exc_info.value is storage_error
+        object_store.put.assert_called_once()
